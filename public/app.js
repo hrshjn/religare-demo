@@ -398,6 +398,24 @@ const spokenLabel = (field) => SPOKEN_LABELS[field] || 'yeh detail';
 const spokenValue = (c) => c.value.split(' · ')[0].replace(/₹/g, '').replace(' / year', ' saal ka').replace(' / month', ' mahine ka').replace('–', ' se ');
 const confirmLine = (c) => `Ek baar confirm kar loon, ${spokenLabel(c.field)} ${spokenValue(c)}. Sahi hai?`;
 
+// Atoms mode: when Ananya reads a value back ("…सही है?"), remember which field it is,
+// so the owner's next "haan" confirms that field in the form.
+function noteReadBack(text) {
+  if (!/सही है\s*\?|sahi hai\s*\?|कन्फ़र्म|कन्फर्म|confirm/i.test(text)) return;
+  const field =
+    /बिज़नेस का नाम|बिजनेस का नाम|business ka naam/i.test(text) ? 'business'
+    : /टर्नओवर|turnover/i.test(text) ? 'turnover'
+    : /कंफर्टेबल|कम्फर्टेबल|comfortable/i.test(text) ? 'emi_comfort'
+    : /ई एम आई|EMI/i.test(text) ? 'existing_emi'
+    : /नाम|naam/i.test(text) ? 'applicant_name'
+    : /लाख|करोड़|अमाउंट|amount|lakh|crore/i.test(text) ? 'requested_amount'
+    : null;
+  if (!field) return;
+  const label = (CFG.fields.find(([k]) => k === field) || [field, field])[1];
+  S.pendingConfirm = { field, label, value: S.form[field]?.display || '' };
+  S.confirmAsked.add(field + '|' + S.pendingConfirm.value);
+}
+
 const consentLine = () => {
   const first = (S.form.applicant_name?.value || '').split(' ')[0];
   return CFG.lines.consent.replace(' {name} ji', first ? ` ${first} ji` : '');
@@ -441,7 +459,7 @@ async function runAtoms() {
       const text = (e.text || '').trim();
       if (!text) return;
       if (e.role === 'user') processOwner(text).then((r) => r?.consent && !S.submitted && push(true));
-      else addTurn('agent', text);
+      else { addTurn('agent', text); noteReadBack(text); }
     });
     agent.on('session_ended', (e) => {
       if (!S.atomsLive || S.mode !== 'atoms') return; // a refused connection: the fallback below takes over

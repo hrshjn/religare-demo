@@ -66,6 +66,15 @@ const CASES = [
   [Q.existing_emi, 'नहीं नहीं actually ₹3,00,000 महीने का है।', 'existing_emi', '₹3 lakh'],
   [Q.collateral, 'हाँ, factory 1 है पर वो मैं मुझे unsecured ही चाहिए।', 'collateral', 'Industrial'],
   [Q.requested_amount, '67,00,000', 'requested_amount', '₹67 lakh'],
+  // From the Oct 17 13:57 call
+  [Q.requested_amount, 'मुझे तकरीबन प-पड़सठ 1,00,000 का loan चाहिए', 'requested_amount', '₹65 lakh'],
+  [Q.requested_amount, 'पड़सठ लाख।', 'requested_amount', '₹65 lakh'],
+  [Q.requested_amount, 'तिरपन लाख चाहिए।', 'requested_amount', '₹53 lakh'],
+  [Q.applicant_name, 'अ... नारायण चौधरी।', 'applicant_name', 'Narayan Chaudhary'],
+  [Q.applicant_name, 'हाँ नारायण चौधरी नाम है', 'applicant_name', 'Narayan Chaudhary'],
+  [Q.applicant_name, 'अनिमेश enterprises।', 'business', 'Animesh Enterprises'],
+  [Q.business, 'अ, अपना कोयम्बत और मैं', 'location', 'Coimbatore'],
+  [Q.business, 'business तो अभी मेरा diwali gift का है, कोयंबटूर में।', 'business', 'Retail'],
 ];
 
 // Cases flagged by people on /logs (see test/pull-labels.mjs).

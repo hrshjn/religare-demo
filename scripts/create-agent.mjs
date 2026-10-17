@@ -38,7 +38,11 @@ You are Ananya, Religare Finvest's AI loan assistant, on a live web call with th
 - Repeat the loan amount back once in words, and any GST number or pincode digit by digit.
 - If an answer is unclear, ask once more in simpler words. If still unclear, say "koi baat nahi" and move on.
 - If the owner corrects something, say "जी, अपडेट कर दिया" and continue.
-- Do not read names back on your own; read back only what get_captured_fields asks you to confirm.
+- Confirm three things, once each, right after you hear them: the loan amount, the owner's full name, and the business name. Read the value back and ask "सही है?". Example: "एक बार कन्फ़र्म कर लूँ, बिज़नेस का नाम अनिमेश एंटरप्राइज़ेज़, सही है?"
+- After you ask "सही है?", stop talking and wait for the owner's answer. Never answer your own question and never move on until they say yes or correct it.
+- Put the read-back and the confirmation question in one reply. Do not say "ठीक है" first and then ask separately.
+- If the owner's reply sounds unfinished ("मेरा नाम है", "मुझे चाहिए कुछ", only "अ..."), say only "जी, बताइए" and wait. Do not guess the rest.
+- If you hear only a number like "एक लाख" right after a garbled word, ask "कितने लाख?" instead of assuming.
 - If the owner gives several details at once, do not ask for them again.
 - If the owner does not know or does not want to say, accept it and move to the next question.
 
@@ -62,12 +66,6 @@ Say: "${LINES.consent('{first name}')}"
 - Stay on the loan application. If asked about something unrelated, say you can only help with the business loan application.
 
 # Tools
-## get_captured_fields
-- When to use: right after the owner tells you their name, their business name, or any amount; any time they give several details in one reply; and once before Close.
-- Result handling: the result has "captured", "missing" and "please_confirm".
-  - If "please_confirm" has an item, your next reply must read that value back exactly as given and ask "सही है?" before anything else. Example: "एक बार कन्फ़र्म कर लूँ, बिज़नेस का नाम रंगशीता एंटरप्राइज़ेज़, सही है?"
-  - If they say it is wrong, ask them to say it again slowly, then continue.
-  - Then ask only about "missing" fields, in the Conversation Flow order. Never read the whole result aloud.
 ## end_call
 - When to use: only after the Close step is finished and you have said goodbye, or if the owner clearly asks to stop the call.`;
 
@@ -89,9 +87,11 @@ const CONFIG = {
   firstMessage: FIRST,
   singlePromptConfig: {
     prompt: PROMPT,
-    // Inline definition: a toolRefs entry to the library copy did not resolve on single-prompt drafts.
+    // No client tool: every get_captured_fields call made Atoms speak a second, unprompted turn
+    // (6 of 6 times in a test call), including answering its own "सही है?". Confirmation is
+    // done by the prompt instead, and the page detects the read-back from the transcript.
     tools: [
-      { type: 'client_tool', name: 'get_captured_fields', description: 'Returns the loan-application fields the live form has captured from this call, the ones still missing, and any value the owner must confirm (please_confirm). Call it after the owner gives a name, business name or amount.', expectsResponse: true, timeoutMs: 2500, fillerPhrases: ['Ek second...'], llmParameters: [] },
+      /* { type: 'client_tool', name: 'get_captured_fields', description: 'Returns the loan-application fields the live form has captured from this call, the ones still missing, and any value the owner must confirm (please_confirm). Call it after the owner gives a name, business name or amount.', expectsResponse: true, timeoutMs: 2500, fillerPhrases: ['Ek second...'], llmParameters: [] }, */
       { type: 'end_call', name: 'end_call', enabled: true, description: 'End the call only after the Close step is finished and you have said goodbye, or if the owner clearly asks to stop. Never end the call while questions remain unless the owner asks.' },
     ],
   },
@@ -102,8 +102,8 @@ const CONFIG = {
   waitForUserToSpeakFirst: false,
   allowInterruptions: true,
   interruptionBackoffTimer: 1,
-  smartTurnConfig: { isEnabled: true, waitTimeInSecs: 2 },
-  voiceDetectionConfig: { confidence: 0.78, minVolume: 0.65, triggerTimeInSecs: 0.2, releaseTimeInSecs: 0.4 },
+  smartTurnConfig: { isEnabled: true, waitTimeInSecs: 3 },
+  voiceDetectionConfig: { confidence: 0.78, minVolume: 0.65, triggerTimeInSecs: 0.2, releaseTimeInSecs: 0.8 }, // 0.4 s cut people off mid-sentence ("मेरा नाम है…")
   denoisingConfig: { isEnabled: true },
   redactionConfig: { isEnabled: false },
   backgroundSound: '',
@@ -137,7 +137,7 @@ const draftId = draft.data.draftId;
 const preview = (await j('GET', `/agent/${agentId}?draftId=${draftId}`)).data._resolvedConfig;
 const checks = {
   prompt: !!preview.prompt?.startsWith('# Role & Objective'),
-  client_tool: (preview.tools || []).some((t) => t.name === 'get_captured_fields'),
+  no_client_tool: !(preview.tools || []).some((t) => t.name === 'get_captured_fields'),
   end_call_specific: (preview.tools || []).some((t) => t.type === 'end_call' && /Close step/.test(t.description || '')),
   redaction_off: preview.redactionConfig?.isEnabled === false,
   denoising_on: preview.denoisingConfig?.isEnabled === true,
