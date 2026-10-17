@@ -12,7 +12,7 @@
 //   - 5 post-call metrics with sentinel values so no metric fails validation
 import 'dotenv/config';
 import fs from 'node:fs';
-import { SCRIPT, CONCERNS, LINES } from '../lib/schema.js';
+import { SCRIPT, CONCERNS, LINES, PRONUNCIATIONS } from '../lib/schema.js';
 
 const BASE = 'https://api.smallest.ai/atoms/v1';
 const H = { Authorization: `Bearer ${process.env.SMALLEST_API_KEY}`, 'Content-Type': 'application/json' };
@@ -25,11 +25,17 @@ You are Ananya, Religare Finvest's AI loan assistant, on a live web call with th
 - Warm, brisk and respectful, like a helpful branch executive. Use "ji" naturally.
 - Speak natural Hinglish: Roman-script Hindi with common English words (loan, EMI, account, GST, turnover). If the owner speaks mostly English, reply mostly in English; if mostly Hindi, mostly Hindi.
 - One or two short sentences per reply. Ask exactly one question per turn. Never read out lists or symbols.
-- Say amounts in words the Indian way: "chalis lakh rupaye", "do crore". Never say "million".
+- Say amounts in words the Indian way ("चालीस लाख", "दो करोड़"). Never say "million".
+
+# Script and pronunciation
+- Write every reply in Devanagari script, because the voice reads Devanagari most naturally. Common English words are fine but write them in Devanagari too (लोन, अकाउंट, बिज़नेस, टर्नओवर).
+- Always spell these terms exactly like this: रेलिगेयर फिनवेस्ट (Religare Finvest), आई टी आर (ITR), जी एस टी (GST), ई एम आई (EMI), उद्यम (Udyam), सिबिल (CIBIL), करंट अकाउंट, सेविंग्स अकाउंट, वर्किंग कैपिटल, प्रोप्राइटरशिप, पार्टनरशिप.
+- Write amounts in words, never digits or the ₹ sign: "चालीस लाख रुपये", "छह से सात करोड़", "पंद्रह हज़ार रुपये महीना".
+- Read a GST number or pincode back one character at a time: "ज़ीरो... आठ... ए...".
 
 # Instructions
 - Say you are an AI assistant if asked.
-- Repeat important values back once in words: the loan amount, and any GST number or pincode, digit by digit ("zero... aath... A...").
+- Repeat the loan amount back once in words, and any GST number or pincode digit by digit.
 - If an answer is unclear, ask once more in simpler words. If still unclear, say "koi baat nahi" and move on.
 - If the owner corrects something, say "Ji, update kar diya" and continue.
 - If the owner gives several details at once, do not ask for them again.
@@ -61,7 +67,7 @@ Say: "${LINES.consent('{first name}')}"
 ## end_call
 - When to use: only after the Close step is finished and you have said goodbye, or if the owner clearly asks to stop the call.`;
 
-const FIRST = `${LINES.greeting} ${SCRIPT[0].say}`;
+const FIRST = LINES.greeting_dv;
 
 const POST_CALL = {
   useInternalAnalyticsModel: true,
@@ -87,6 +93,7 @@ const CONFIG = {
   },
   language: { default: 'hi', supported: ['hi', 'en'], switching: { isEnabled: true, minWordsForDetection: 2, strongSignalThreshold: 0.7, weakSignalThreshold: 0.3, minConsecutiveForWeakThresholdSwitch: 2 } },
   synthesizer: { voiceConfig: { model: 'waves_lightning_v3_1', voiceId: process.env.ATOMS_VOICE_ID || 'srishti', gender: 'female' }, speed: 1.05, sampleRate: 24000 },
+  pronunciationDicts: PRONUNCIATIONS.map(([word, pronunciation]) => ({ word, pronunciation })),
   muteUserUntilFirstBotResponse: true,
   waitForUserToSpeakFirst: false,
   allowInterruptions: true,
@@ -132,6 +139,7 @@ const checks = {
   denoising_on: preview.denoisingConfig?.isEnabled === true,
   metrics: preview.postCallAnalyticsConfig?.dispositionMetrics?.length === POST_CALL.dispositionMetrics.length,
   first_message: preview.firstMessage === FIRST,
+  pronunciations: (preview.pronunciationDicts || []).length === PRONUNCIATIONS.length,
 };
 console.log('draft', draftId, 'checks', checks);
 console.log('tools on draft:', (preview.tools || []).map((t) => `${t.type}:${t.name}`).join(', '));

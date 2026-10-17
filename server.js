@@ -157,7 +157,8 @@ const routes = {
 // Lightning TTS for Direct mode. Returns 502 on failure so the browser falls back
 // to its own speech synthesis.
 async function tts(req, res) {
-  const { text } = await readJson(req);
+  const { text, pronunciation = true } = await readJson(req);
+  const dict = process.env.PRONUNCIATION_DICT_ID;
   try {
     const r = await fetch('https://api.smallest.ai/waves/v1/tts', {
       method: 'POST',
@@ -169,6 +170,7 @@ async function tts(req, res) {
         language: 'hi',
         sample_rate: 24000,
         output_format: 'wav',
+        ...(dict && pronunciation ? { pronunciation_dicts: [dict] } : {}),
       }),
       signal: AbortSignal.timeout(8000),
     });
