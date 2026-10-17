@@ -59,6 +59,15 @@ const CASES = [
   [Q.emi_comfort, 'दो-तीन लाख महीना ठीक है।', 'emi_comfort', '₹2–3 lakh'],
 ];
 
+// Cases flagged by people on /logs (see test/pull-labels.mjs).
+import fs from 'node:fs';
+const labeledFile = new URL('./labeled-cases.json', import.meta.url);
+if (fs.existsSync(labeledFile)) {
+  const labeled = JSON.parse(fs.readFileSync(labeledFile, 'utf8'));
+  for (const [q, said, field, want] of labeled) CASES.push([q, said, field, want]);
+  console.log(`+ ${labeled.length} labeled cases from internal demos`);
+}
+
 let fails = 0;
 const results = await Promise.all(CASES.map(async ([q, said, field, want]) => {
   try {

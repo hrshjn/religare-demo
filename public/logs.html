@@ -6,7 +6,7 @@
   <title>Decision Log</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
-    :root { --ink: #111214; --ink-2: #3a3d42; --muted: #74787e; --line: #e7e8ea; --card: #f6f7f7; --accent: #2e8b67; --fresh: #e2f1eb; --warn: #a8660c; --warn-bg: #fbf1e1; --bad: #b3261e; --bad-bg: #fbe9e7; }
+    :root { --ink: #111214; --ink-2: #3a3d42; --muted: #74787e; --line: #e7e8ea; --card: #f6f7f7; --accent: #076533; --fresh: #e2f1eb; --warn: #a8660c; --warn-bg: #fbf1e1; --bad: #b3261e; --bad-bg: #fbe9e7; }
     * { box-sizing: border-box; }
     body { margin: 0; font: 14px/1.45 Inter, ui-sans-serif, system-ui, sans-serif; color: var(--ink); background: #fff; }
     header { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; padding: 20px max(16px, 3vw) 12px; border-bottom: 1px solid var(--line); }
@@ -33,13 +33,24 @@
     .chip.warn { border-color: #f0d7ae; background: var(--warn-bg); color: var(--warn); }
     .chip.bad { border-color: #f3c3be; background: var(--bad-bg); color: var(--bad); }
     .push { border: 1px dashed #cfd2d6; border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; }
+    .review { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; background: var(--card); }
+    .review h2 { font-size: 15px; margin: 0 0 8px; }
+    .review .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px 16px; margin: 6px 0 10px; }
+    .review .k { color: var(--muted); font-size: 12px; }
+    .flagbtn { font: inherit; font-size: 12px; border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 3px 10px; cursor: pointer; margin-left: auto; }
+    .flagform { display: none; gap: 6px; flex-wrap: wrap; margin-top: 8px; align-items: center; }
+    .flagform.on { display: flex; }
+    .flagform select, .flagform input { font: inherit; font-size: 13px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; }
+    .flagform input.note { flex: 1; min-width: 200px; }
+    .flagform button { font: inherit; font-size: 13px; padding: 5px 12px; border-radius: 6px; border: 0; background: var(--ink); color: #fff; cursor: pointer; }
+    .labelled { font-size: 12px; color: var(--warn); margin-top: 6px; }
     pre { white-space: pre-wrap; font: 12px/1.45 ui-monospace, Menlo, monospace; margin: 6px 0 0; color: var(--ink-2); }
     @media (max-width: 800px) { .wrap { grid-template-columns: 1fr; } aside { max-height: 35vh; border-right: 0; border-bottom: 1px solid var(--line); } }
   </style>
 </head>
 <body>
   <header>
-    <h1>Decision log</h1>
+    <div style="display:flex;align-items:center;gap:14px"><img src="/religare-logo.png" alt="Religare SME Loans" style="height:36px;width:auto"><h1>Decision log</h1></div>
     <div class="muted">Every owner turn: what Pulse heard → candidates → Jev's picks → what the form got · <a href="/api/logs.jsonl">Download JSONL</a> · <a href="/">Back to demo</a></div>
   </header>
   <div class="wrap">
@@ -50,6 +61,8 @@
     const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const pct = (p) => (p == null ? '' : ` ${Math.round(p * 100)}%`);
     const IGNORE = new Set(['not_mentioned', 'none', 'other']);
+    let FIELDS = [];
+    fetch('/api/config').then((r) => r.json()).then((c) => { FIELDS = c.fields; });
 
     async function load() {
       const { sessions } = await fetch('/api/logs').then((r) => r.json());
@@ -66,8 +79,26 @@
     async function show(id, el) {
       document.querySelectorAll('.sess.on').forEach((x) => x.classList.remove('on'));
       el.classList.add('on');
-      const rows = await fetch('/api/logs?session=' + encodeURIComponent(id)).then((r) => r.json());
-      document.getElementById('detail').innerHTML = rows.map((r) => {
+      const [rows, rv] = await Promise.all([
+        fetch('/api/logs?session=' + encodeURIComponent(id)).then((r) => r.json()),
+        fetch('/api/review?session=' + encodeURIComponent(id)).then((r) => r.json()).catch(() => null),
+      ]);
+      const labelsByTurn = {};
+      for (const l of rv?.labels || []) (labelsByTurn[l.turn_ts] ||= []).push(l);
+      const label = (f) => (FIELDS.find(([k]) => k === f) || [f, f])[1];
+      const reviewHtml = rv ? `<div class="review">
+        <h2>Review · ${rv.filled}/14 captured${rv.pushed ? ' · sent to credit team' : ''}</h2>
+        <div class="grid">${Object.entries(rv.final).map(([f, v]) => `<div><div class="k">${esc(label(f))}</div><div>${esc(v.value)}${v.confirm ? ' <span class="chip warn">confirm</span>' : ''}</div></div>`).join('')}</div>
+        ${rv.missing.length ? `<div class="row"><span class="lab">Missing</span>${rv.missing.map((f) => `<span class="chip warn">${esc(label(f))}</span>`).join('')}</div>` : ''}
+        ${rv.possible_misses.length ? `<div class="row"><span class="lab">Possible misses</span>${rv.possible_misses.map((m) => `<span class="chip warn">${esc(m.heard)}</span>`).join('')}</div>` : ''}
+        ${rv.low_confidence.length ? `<div class="row"><span class="lab">Low confidence</span>${rv.low_confidence.map((m) => `<span class="chip warn">${esc(label(m.field))}: ${esc(m.value)}${pct(m.p)}</span>`).join('')}</div>` : ''}
+        ${rv.borrower_questions.length ? `<div class="row"><span class="lab">Borrower asked</span>${rv.borrower_questions.map((q) => `<span class="chip">${esc(q.concern)}</span>`).join('')}</div>` : ''}
+        ${rv.atoms ? `<div class="row"><span class="lab">Atoms call</span><span class="chip">${Math.round(rv.atoms.duration || 0)} s · ${esc(rv.atoms.disconnection || '')}</span>${rv.atoms.recording ? `<a class="chip" href="${esc(rv.atoms.recording)}" target="_blank" rel="noopener">Recording ↗</a>` : ''}${Object.entries(rv.atoms.metrics || {}).map(([k, v]) => `<span class="chip">${esc(k)}: ${esc(v)}</span>`).join('')}</div>
+          ${rv.atoms.note ? `<div class="row"><span class="lab">Atoms vs Jev</span><span class="chip">${esc(rv.atoms.note)}</span></div>` : rv.atoms.disagreements.length ? `<div class="row"><span class="lab">Atoms vs Jev</span>${rv.atoms.disagreements.map((d) => `<span class="chip bad">${esc(label(d.field))}: Atoms ${esc(d.atoms)} · Jev ${esc(d.jev ?? 'nothing')}</span>`).join('')}</div>` : '<div class="row"><span class="lab">Atoms vs Jev</span><span class="chip ok">agree</span></div>'}
+          ${rv.atoms.summary ? `<div class="muted" style="margin-top:6px">${esc(rv.atoms.summary)}</div>` : ''}` : ''}
+        ${rv.labels.length ? `<div class="row"><span class="lab">Flags</span>${rv.labels.map((l) => `<span class="chip warn">${esc(label(l.field))} → ${esc(l.expected || '(should be empty)')}</span>`).join('')}</div>` : ''}
+      </div>` : '';
+      document.getElementById('detail').innerHTML = reviewHtml + rows.map((r) => {
         if (r.type === 'push') return `<div class="push"><b>Sent to ${esc(r.target)}</b> · ${esc(r.application_id)} <span class="muted">${new Date(r.ts).toLocaleTimeString()}</span><details><summary class="muted">Payload</summary><pre>${esc(JSON.stringify(r.application, null, 2))}</pre></details></div>`;
         const applied = Object.entries(r.applied || {});
         const miss = !r.error && !applied.length && /\d|lakh|crore|लाख|करोड़|साल|saal/i.test(r.heard || '');
@@ -80,9 +111,25 @@
           <div class="row"><span class="lab">Candidates</span>${(r.candidates || []).map((c) => `<span class="chip">${esc(c.kind)} · ${esc(c.text)}</span>`).join('') || '<span class="muted">none</span>'}</div>
           <div class="row"><span class="lab">Jev picked</span>${picks.map(([k, d]) => `<span class="chip">${esc(k)} → ${esc(d.pick ?? 'yes')}${pct(d.p ?? d.yes)}</span>`).join('') || '<span class="muted">nothing specific</span>'}</div>
           <div class="row"><span class="lab">Applied</span>${applied.map(([f, v]) => `<span class="chip ${v.confirm ? 'warn' : 'ok'}">${esc(f)} = ${esc(v.value)}${pct(v.p)}</span>`).join('') || `<span class="chip ${miss ? 'warn' : ''}">no field changed</span>`}${r.concern ? `<span class="chip">asked: ${esc(r.concern)}</span>` : ''}</div>
-          <div class="row muted" style="font-size:12px">Jev ${r.jev_ms ?? '?'} ms · $${(r.cost_usd ?? 0).toFixed(6)} · ${new Date(r.ts).toLocaleTimeString()}</div>`}
+          <div class="row muted" style="font-size:12px">Jev ${r.jev_ms ?? '?'} ms · $${(r.cost_usd ?? 0).toFixed(6)} · ${new Date(r.ts).toLocaleTimeString()}<button class="flagbtn" data-ts="${esc(r.ts)}">Flag</button></div>
+          <form class="flagform" data-ts="${esc(r.ts)}">
+            <select name="field">${FIELDS.map(([k, l]) => `<option value="${esc(k)}">${esc(l)}</option>`).join('')}</select>
+            <input name="expected" placeholder="Should have been… (e.g. ₹6–7 Cr / year)">
+            <input name="note" class="note" placeholder="Note (optional)">
+            <button type="submit">Save flag</button>
+          </form>
+          ${(labelsByTurn[r.ts] || []).map((l) => `<div class="labelled">Flagged: ${esc(label(l.field))} should be "${esc(l.expected)}"${l.note ? ' · ' + esc(l.note) : ''}</div>`).join('')}`}
         </div>`;
       }).join('') || '<p class="muted">No turns.</p>';
+      const byTs = Object.fromEntries(rows.map((r) => [r.ts, r]));
+      document.querySelectorAll('.flagbtn').forEach((b) => b.addEventListener('click', () => document.querySelector(`.flagform[data-ts="${b.dataset.ts}"]`).classList.toggle('on')));
+      document.querySelectorAll('.flagform').forEach((f) => f.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const r = byTs[f.dataset.ts], fd = new FormData(f);
+        const res = await fetch('/api/labels', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session: id, turn_ts: r.ts, agent_question: r.agent_question, heard: r.heard, field: fd.get('field'), expected: fd.get('expected'), note: fd.get('note') }) });
+        f.querySelector('button').textContent = res.ok ? 'Saved' : 'Could not save';
+        if (res.ok) setTimeout(() => show(id, el), 500);
+      }));
     }
     load();
   </script>

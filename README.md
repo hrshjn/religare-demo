@@ -73,7 +73,10 @@ Every owner turn is logged as one JSON line: session or call id, engine, the age
 - **Export:** `/api/logs.jsonl` downloads everything.
 - **Storage:** `LOG_DIR`, which is a 1 GB persistent disk at `/var/data` on Render. Lines are also echoed to the Render log stream with a `[turn]` prefix.
 - **Replay a real Atoms call** through the current pipeline: `node test/replay-call.mjs CALL-…`, using the call id from the Atoms dashboard or `/logs`.
-- **Regression set:** `npm test` runs `test/hard-cases.mjs`, single-turn cases in the style Pulse actually transcribes. When a logged turn goes wrong, add it there before fixing it.
+- **Review panel:** each session on `/logs` starts with a review: the final application, missing fields, low-confidence fields, possible misses and borrower questions. For Atoms calls it also shows the call recording, Atoms' post-call summary and metrics, and where those disagree with what Jev filled.
+- **Flag:** every turn has a Flag button. Pick the field, type what it should have been, and add a note. Flags are saved to `LOG_DIR/labels.jsonl`.
+- **Close the loop:** `npm run pull-labels -- https://<host> <passcode>` writes the flags to `test/labeled-cases.json`. `npm test` then runs them with the 36 built-in cases in `test/hard-cases.mjs`. Fix the parser, prompt or Jev question until they pass, then commit the labeled cases.
+- **Replay a real call:** `node test/replay-call.mjs CALL-…` re-runs any Atoms call through the current pipeline, including calls made before logging existed.
 
 ## Pronunciation
 

@@ -6,7 +6,7 @@
   --card: #f6f7f7;
   --fresh: #e2f1eb;
   --fresh-line: #b9dccd;
-  --accent: #2e8b67;
+  --accent: #076533; /* Religare green, sampled from the logo */
   --warn: #a8660c;
   --warn-bg: #fbf1e1;
   --bad: #b3261e;
@@ -54,7 +54,9 @@ h1 {
   transition: opacity .25s;
 }
 h1.swap { opacity: 0; }
-.brand { color: var(--ink); padding-top: 6px; }
+.brand { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: none; padding-top: 2px; }
+.brand img { height: clamp(40px, 4.2vw, 76px); width: auto; display: block; }
+.brand .powered { font-size: clamp(11px, .75vw, 13px); color: var(--muted); letter-spacing: .02em; }
 
 .cols {
   flex: 1;

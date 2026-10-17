@@ -2,3 +2,4 @@
 node_modules
 *.wav
 !test/fixtures/*.wav
+data/
