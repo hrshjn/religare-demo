@@ -1,4 +1,4 @@
-# One-click deploy: https://render.com/deploy?repo=https://github.com/hrshjn/religare-mse-voice-demo
+# One-click deploy: https://render.com/deploy?repo=https://github.com/hrshjn/religare-demo
 # Render asks for the two API keys on first deploy and generates DEMO_PASSCODE.
 # Open the app once as https://<service>.onrender.com/?key=<DEMO_PASSCODE>.
 services:

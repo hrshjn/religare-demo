@@ -19,7 +19,7 @@ Jev does not generate text. It answers Choice, Noul (yes/no) and Score questions
 
 ## Deploy (Render)
 
-[Deploy to Render](https://render.com/deploy?repo=https://github.com/hrshjn/religare-mse-voice-demo): Render reads `render.yaml`, asks for `SMALLEST_API_KEY` and `OPENROUTER_API_KEY`, and generates `DEMO_PASSCODE`. When it's live, open `https://<service>.onrender.com/?key=<DEMO_PASSCODE>` once in Chrome; a cookie keeps you signed in for 7 days. Render serves HTTPS, so the microphone works.
+[Deploy to Render](https://render.com/deploy?repo=https://github.com/hrshjn/religare-demo): Render reads `render.yaml`, asks for `SMALLEST_API_KEY` and `OPENROUTER_API_KEY`, and generates `DEMO_PASSCODE`. When it's live, open `https://<service>.onrender.com/?key=<DEMO_PASSCODE>` once in Chrome; a cookie keeps you signed in for 7 days. Render serves HTTPS, so the microphone works.
 
 ## Run it locally
 
