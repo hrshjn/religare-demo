@@ -25,3 +25,5 @@ services:
         value: hi
       - key: ATOMS_AGENT_ID
         value: 6ad32773e1ae60d96042155b
+      - key: DEFAULT_ENGINE
+        value: atoms # Atoms voice agent; "direct" = Pulse + scripted agent
