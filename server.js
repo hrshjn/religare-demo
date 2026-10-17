@@ -28,6 +28,16 @@ const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; ch
 
 const pushed = []; // mock LOS inbox, in memory
 
+// test/fixtures/owner-amount-hi.wav (16-bit mono) resampled to 24 kHz PCM, for the Atoms check.
+function fixturePcm24k() {
+  const b = fs.readFileSync(path.join(ROOT, 'test/fixtures/owner-amount-hi.wav'));
+  const rate = b.readUInt32LE(24);
+  const src = new Int16Array(b.buffer.slice(b.byteOffset + 44, b.byteOffset + b.length - ((b.length - 44) % 2)));
+  const n = Math.floor(src.length * 24000 / rate), out = Buffer.alloc(n * 2);
+  for (let i = 0; i < n; i++) out.writeInt16LE(src[Math.min(src.length - 1, Math.floor(i * rate / 24000))], i * 2);
+  return out;
+}
+
 function send(res, status, body, type = 'application/json') {
   res.writeHead(status, { 'Content-Type': type, 'Cache-Control': 'no-store' });
   res.end(type === 'application/json' ? JSON.stringify(body) : body);
@@ -96,6 +106,8 @@ const routes = {
       let audioBytes = 0;
       const ws = new WebSocket(url);
       let callId = null;
+      let speakNow = () => {};
+      const counts = {};
       const done = async (result) => {
         try { ws.terminate(); } catch {}
         let log = null;
@@ -105,22 +117,37 @@ const routes = {
           const d = c.data || c;
           log = { status: d.status, disconnectionReason: d.disconnectionReason ?? d.disconnection_reason, duration: d.duration, transcript: (d.transcript || []).slice(0, 4), errors: d.errors ?? d.error };
         }
-        resolve({ ...result, call_id: callId, events, agent_audio_seconds: +(audioBytes / 48000).toFixed(1), call_log: log });
+        resolve({ ...result, call_id: callId, event_counts: counts, events, agent_audio_seconds: +(audioBytes / 48000).toFixed(1), call_log: log });
       };
       ws.on('unexpected-response', (_, r) => { let b = ''; r.on('data', (x) => (b += x)); r.on('end', () => done({ connected: false, status: r.statusCode, body: b })); });
       ws.on('error', (e) => done({ connected: false, error: e.message }));
       ws.on('open', () => {
-        // Stream silence like an idle mic so the pipeline starts, then wait for the greeting.
-        const silence = Buffer.alloc(4800).toString('base64'); // 100 ms @ 24 kHz
-        const tick = setInterval(() => ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: silence })), 100);
-        setTimeout(() => { clearInterval(tick); done({ connected: true }); }, 14000);
+        // Stream silence like an idle mic; after the greeting ends, "speak" a recorded
+        // Hindi answer, then keep streaming silence and collect what comes back.
+        const silence = Buffer.alloc(4800); // 100 ms @ 24 kHz
+        const speech = fixturePcm24k();
+        let off = -1;
+        const tick = setInterval(() => {
+          if (ws.readyState !== WebSocket.OPEN) return;
+          let chunk = silence;
+          if (off >= 0 && off < speech.length) { chunk = speech.subarray(off, off + 4800); off += 4800; }
+          ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: chunk.toString('base64') }));
+        }, 100);
+        speakNow = () => { if (off < 0) off = 0; };
+        setTimeout(speakNow, 16000); // fallback if no stop_talking event
+        setTimeout(() => { clearInterval(tick); done({ connected: true }); }, 34000);
       });
       ws.on('message', (d) => {
         const e = JSON.parse(d);
+        counts[e.type] = (counts[e.type] || 0) + 1;
+        if (e.type === 'agent_stop_talking' || e.type === 'agent.stop_talking') setTimeout(() => speakNow(), 600);
         if (e.type === 'output_audio.delta') audioBytes += Buffer.from(e.audio || '', 'base64').length;
         else {
           if (e.type === 'session.created') callId = e.call_id;
-          if (events.length < 12) events.push(JSON.stringify(e).slice(0, 300));
+          // keep non-delta events and the last delta per role, so the list stays readable
+          const isDelta = /delta/.test(e.type);
+          if (!isDelta || e.final === true) events.push(JSON.stringify(e).slice(0, 300));
+          if (events.length > 40) events.splice(1, 1);
         }
       });
     });

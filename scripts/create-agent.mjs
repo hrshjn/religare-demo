@@ -96,7 +96,8 @@ const CONFIG = {
   denoisingConfig: { isEnabled: true },
   redactionConfig: { isEnabled: false },
   backgroundSound: '',
-  timezone: { label: '(GMT+5:30) Asia/Kolkata', offset: 330 },
+  // offset is in hours on the runtime (330 "minutes" failed every call: offset must be < 24h)
+  timezone: { label: '(GMT+5:30) Asia/Kolkata', offset: 5.5 },
   postCallAnalyticsConfig: POST_CALL,
 };
 
@@ -137,7 +138,7 @@ console.log('tools on draft:', (preview.tools || []).map((t) => `${t.type}:${t.n
 if (!checks.prompt) { console.error('Prompt did not land on the draft; not publishing.'); process.exit(1); }
 
 if (DRY) process.exit(0);
-const label = `demo config ${new Date().toISOString().slice(0, 16)}`;
+const label = `demo config ${new Date().toISOString().slice(0, 16).replace(/[T:]/g, ' ')}`;
 const pub = await j('POST', `/agent/${agentId}/branches/${main}/draft/publish`, { label });
 console.log('publish', pub.data?.state, '(security scan runs before it goes live)');
 for (let i = 0; i < 60; i++) {
