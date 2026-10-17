@@ -292,6 +292,25 @@ async function tts(req, res) {
 const PASS = process.env.DEMO_PASSCODE;
 const authed = (req) => !PASS || (req.headers.cookie || '').split(/;\s*/).includes(`demo_key=${PASS}`);
 
+// The demo itself is public; only the review tools (which hold what real people said) need the passcode.
+const ADMIN = [/^\/logs$/, /^\/api\/logs/, /^\/api\/review/, /^\/api\/history/, /^\/api\/labels/, /^\/api\/inbox/, /^\/api\/atoms-check/];
+const needsPass = (pathname) => ADMIN.some((re) => re.test(pathname));
+
+// Per-IP hourly limits on the endpoints that spend API credits.
+const LIMITS = { '/api/call-token': 30, '/api/turn': 400, '/api/tts': 400, '/stt': 150 };
+const hits = new Map();
+function overLimit(req, key) {
+  const max = LIMITS[key];
+  if (!max) return false;
+  const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+  const id = `${ip}|${key}`, now = Date.now();
+  const h = hits.get(id) || { n: 0, reset: now + 3600_000 };
+  if (now > h.reset) { h.n = 0; h.reset = now + 3600_000; }
+  h.n++;
+  hits.set(id, h);
+  return h.n > max;
+}
+
 // Sign-in page for the passcode gate (instead of a bare 401).
 function signInPage(wrong) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -311,10 +330,10 @@ function signInPage(wrong) {
   button { margin-top:14px; width:100%; font:inherit; font-weight:500; padding:11px; border:0; border-radius:999px; background:var(--ink); color:#fff; cursor:pointer; }
   .err { color:var(--bad); font-size:14px; margin:10px 0 0; }
 </style></head><body>
-<form class="card" method="get" action="/">
+<form class="card" method="get" action="/logs">
   <img src="/religare-logo.png" alt="Religare SME Loans">
-  <h1>SME loan capture demo</h1>
-  <p>Enter the demo passcode. This browser stays signed in for 7 days.</p>
+  <h1>Decision log</h1>
+  <p>The demo is open to everyone. The log of what callers said needs the team passcode. This browser stays signed in for 7 days.</p>
   <label for="key">Passcode</label>
   <input id="key" name="key" type="password" autocomplete="current-password" required autofocus>
   ${wrong ? '<div class="err">That passcode is not right. Check it and try again.</div>' : ''}
@@ -330,10 +349,14 @@ const server = http.createServer(async (req, res) => {
     return fs.createReadStream(path.join(ROOT, 'public/religare-logo.png')).pipe(res);
   }
   if (PASS && url.searchParams.get('key') === PASS) {
-    res.writeHead(302, { 'Set-Cookie': `demo_key=${PASS}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800`, Location: '/' });
+    res.writeHead(302, { 'Set-Cookie': `demo_key=${PASS}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=604800`, Location: url.pathname === '/logs' ? '/logs' : '/' });
     return res.end();
   }
-  if (!authed(req)) {
+  if (overLimit(req, url.pathname)) {
+    res.writeHead(429, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ error: 'Too many requests from this network. Try again in an hour.' }));
+  }
+  if (needsPass(url.pathname) && !authed(req)) {
     if (url.pathname.startsWith('/api/') || req.headers.upgrade) {
       res.writeHead(401, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ error: 'Passcode required' }));
@@ -369,7 +392,7 @@ const server = http.createServer(async (req, res) => {
 
 // Direct mode: browser mic PCM16 @16 kHz → this socket → Pulse streaming STT.
 // One Pulse session per owner turn; browser sends {"type":"stop"} when the turn ends.
-const wss = new WebSocketServer({ server, path: '/stt', verifyClient: ({ req }) => authed(req) });
+const wss = new WebSocketServer({ server, path: '/stt', verifyClient: ({ req }) => !overLimit(req, '/stt') });
 wss.on('connection', (client, req) => {
   const lang = new URL(req.url, 'http://x').searchParams.get('language') || process.env.PULSE_LANGUAGE || 'hi';
   const u = new URL('wss://api.smallest.ai/waves/v1/stt/live');

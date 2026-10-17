@@ -17,6 +17,11 @@ agent voice ◀─ /api/tts (Lightning) ── falls back to the browser's hi-IN
 
 Jev does not generate text. It answers Choice, Noul (yes/no) and Score questions. That is why code proposes the values (for example "₹40 lakh" or "Ramesh Gupta") and Jev only decides where each one goes ("is ₹40 lakh the loan amount, the turnover, or the EMI?"). Each decision comes with a probability, and anything under 80% is marked **confirm** on screen.
 
+## Access
+
+- **The demo is public.** Anyone with the URL can start a call. Each IP gets hourly limits on the endpoints that spend API credits: 30 calls, 400 Jev turns, 400 TTS requests, 150 speech-to-text streams.
+- **The decision log is not public.** `/logs` and the `/api/logs`, `/api/review`, `/api/history`, `/api/labels`, `/api/inbox` and `/api/atoms-check` endpoints hold what callers said, so they need `DEMO_PASSCODE`. Open `/logs`, enter the passcode once, and a cookie keeps that browser signed in for 7 days.
+
 ## Deploy (Render)
 
 [Deploy to Render](https://render.com/deploy?repo=https://github.com/hrshjn/religare-demo): Render reads `render.yaml`, asks for `SMALLEST_API_KEY` and `OPENROUTER_API_KEY`, and generates `DEMO_PASSCODE`. When it's live, open `https://<service>.onrender.com/?key=<DEMO_PASSCODE>` once in Chrome; a cookie keeps you signed in for 7 days. Render serves HTTPS, so the microphone works.
