@@ -44,6 +44,7 @@ const routes = {
     atomsAgentId: process.env.ATOMS_AGENT_ID || null,
     jevModel: process.env.JEV_MODEL || 'typesafe/jev-1.14',
     pulseLanguage: process.env.PULSE_LANGUAGE || 'hi',
+    defaultEngine: process.env.DEFAULT_ENGINE || 'direct',
     fields: FIELDS,
     script: SCRIPT,
     lines: { ...LINES, consent: LINES.consent('{name}') }, // client fills in the first name
@@ -84,6 +85,27 @@ const routes = {
     return receipt;
   },
   'GET /api/inbox': async () => pushed,
+
+  // Diagnostic: open a real Atoms web call from this server and report the first
+  // events, to tell network problems apart from Atoms problems.
+  'GET /api/atoms-check': async () => {
+    const reg = await routes['POST /api/call-token']();
+    const url = `wss://api.smallest.ai/atoms/v1/agent/connect?token=${reg.access_token}&agent_id=${reg.agentId}&mode=webcall&input_audio_format=pcm_24000`;
+    return new Promise((resolve) => {
+      const events = [];
+      let audioBytes = 0;
+      const ws = new WebSocket(url);
+      const done = (result) => { try { ws.terminate(); } catch {} resolve({ ...result, events, agent_audio_seconds: +(audioBytes / 48000).toFixed(1) }); };
+      ws.on('unexpected-response', (_, r) => { let b = ''; r.on('data', (x) => (b += x)); r.on('end', () => done({ connected: false, status: r.statusCode, body: b })); });
+      ws.on('error', (e) => done({ connected: false, error: e.message }));
+      ws.on('open', () => setTimeout(() => done({ connected: true }), 8000));
+      ws.on('message', (d) => {
+        const e = JSON.parse(d);
+        if (e.type === 'output_audio.delta') audioBytes += Buffer.from(e.audio || '', 'base64').length;
+        else if (events.length < 12) events.push({ type: e.type, role: e.role, text: e.text });
+      });
+    });
+  },
 };
 
 // Lightning TTS for Direct mode. Returns 502 on failure so the browser falls back

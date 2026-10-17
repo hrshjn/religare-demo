@@ -595,7 +595,7 @@ async function init() {
     <option value="direct:hi">Pulse · Hindi</option>
     <option value="direct:en">Pulse · English</option>
     ${CFG.atomsAgentId ? '<option value="atoms">Atoms voice agent</option>' : ''}`;
-  eng.value = 'direct:' + CFG.pulseLanguage;
+  eng.value = CFG.defaultEngine === 'atoms' && CFG.atomsAgentId ? 'atoms' : 'direct:' + CFG.pulseLanguage;
   reset();
 
   $('#btnCall').addEventListener('click', () => (S.running || S.agent ? stopCall() : startCall()));
