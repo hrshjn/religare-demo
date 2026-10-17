@@ -62,8 +62,27 @@ Hover over any filled field to highlight the sentence it came from.
 
   If the crowd keeps cutting the agent off, set `allowInterruptions: false`.
 - **Redaction off.** It masks names and numbers, which the form needs.
-- **Hindi + English** with language switching, the `srishti` voice (Hindi-recommended), and the Asia/Kolkata timezone.
+- **Hindi + English** with language switching, the `rhea` voice on Lightning v3.1 Pro only (Indian accent, Hindi-recommended), and the Asia/Kolkata timezone.
 - **Five post-call metrics**: loan amount, purpose, bank account type, top borrower concern, consent. Each has a sentinel value ("unknown", 0, false) so a metric can't fail validation and drop the whole result.
+
+## Decision log (for improving the agent)
+
+Every owner turn is logged as one JSON line: session or call id, engine, the agent's question, what Pulse heard, the romanized text Jev saw, the candidates code proposed, Jev's pick and probability for each question, the fields applied, latency and cost. Each "Send to credit team" is logged too, with the full payload.
+
+- **Review:** open `/logs`. Sessions are listed on the left. Amber turns mention a number or duration but changed no field; these are the ones to look at. Red turns hit an error.
+- **Export:** `/api/logs.jsonl` downloads everything.
+- **Storage:** `LOG_DIR`, which is a 1 GB persistent disk at `/var/data` on Render. Lines are also echoed to the Render log stream with a `[turn]` prefix.
+- **Replay a real Atoms call** through the current pipeline: `node test/replay-call.mjs CALL-…`, using the call id from the Atoms dashboard or `/logs`.
+- **Regression set:** `npm test` runs `test/hard-cases.mjs`, single-turn cases in the style Pulse actually transcribes. When a logged turn goes wrong, add it there before fixing it.
+
+## Pronunciation
+
+The Hindi voice says Latin-script terms badly ("religar"). Three layers fix this:
+1. The prompt tells the agent to write replies in Devanagari, with fixed spellings for brand and finance terms (रेलिगेयर फिनवेस्ट, आई टी आर, जी एस टी, ई एम आई, उद्यम, सिबिल).
+2. The same terms are set as the agent's `pronunciationDicts`.
+3. Direct-mode TTS sends a Lightning pronunciation dictionary (`PRONUNCIATION_DICT_ID`).
+
+The list lives in `lib/schema.js → PRONUNCIATIONS`. `node test/pronounce-check.mjs <host> <passcode> "<text>"` speaks a line with and without the dictionary and transcribes both with Pulse, for a quick A/B.
 
 ## Measured (this build, Oct 17 2026)
 

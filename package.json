@@ -4,7 +4,7 @@
   "description": "Live Hinglish SME loan capture: Pulse STT + Jev decisions",
   "main": "index.js",
   "scripts": {
-    "test": "node test/script-run.mjs kirana",
+    "test": "node test/hard-cases.mjs",
     "start": "node server.js"
   },
   "keywords": [],

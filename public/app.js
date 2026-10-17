@@ -34,7 +34,7 @@ const S = {
   queue: Promise.resolve(),
   running: false, mode: 'direct', ptt: false, submitted: false,
   askCount: {}, step: null, awaitingConsent: false,
-  lastJev: null, jevTurns: 0, callId: null,
+  lastJev: null, jevTurns: 0, callId: null, session: null,
   agent: null, mic: null, listenCtl: null, rehearsing: false, speakingAudio: null,
 };
 
@@ -141,7 +141,7 @@ async function processOwner(text) {
       const r = await fetch('/api/turn', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ utterance: text, history, form: S.form, turn: turnIdx }),
+        body: JSON.stringify({ utterance: text, history, form: S.form, turn: turnIdx, session: S.callId || S.session, engine: S.rehearsing ? 'rehearsal' : S.mode === 'atoms' ? 'atoms' : 'direct:' + ($('#engine').value.split(':')[1] || 'hi') }),
       }).then((x) => x.json());
       if (r.error) throw new Error(r.error);
       S.form = r.form;
@@ -581,7 +581,7 @@ async function push(fromConsent = false) {
   const els = [...box.children];
   for (let i = 0; i < 3; i++) { els[i].className = 'step run'; await sleep(350); els[i].className = 'step ok'; }
   els[3].className = 'step run';
-  const r = await fetch('/api/push', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ target, application: body }) }).then((x) => x.json());
+  const r = await fetch('/api/push', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ target, application: body, session: S.callId || S.session }) }).then((x) => x.json());
   els[3].className = 'step ok';
   els[3].querySelector('span').textContent = `${r.status} Created · ${r.application_id}`;
   $('#modalTitle').textContent = `Application ${r.application_id}`;
@@ -592,7 +592,7 @@ async function push(fromConsent = false) {
 // ---------------- wiring ----------------
 
 function reset() {
-  Object.assign(S, { history: [], form: {}, fresh: new Set(), assessment: null, concerns: [], submitted: false, lastJev: null, jevTurns: 0, askCount: {}, awaitingConsent: false, callId: null });
+  Object.assign(S, { history: [], form: {}, fresh: new Set(), assessment: null, concerns: [], submitted: false, lastJev: null, jevTurns: 0, askCount: {}, awaitingConsent: false, callId: null, session: `web-${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')}-${Math.random().toString(36).slice(2, 6)}` });
   $('#transcript').innerHTML = `<div class="empty"><p>Press <b>Start call</b>. The agent asks in Hinglish; answer however you like — Hindi, English, or both.</p><p class="muted">Try giving amounts in lakh, correcting yourself, or asking "savings account se chalega?"</p></div>`;
   $('#headline').textContent = 'Bolkar business loan apply kijiye.';
   $('#jevBody').innerHTML = ''; $('#jevMeta').textContent = 'No turns yet';

@@ -10,6 +10,10 @@ services:
     buildCommand: npm ci
     startCommand: npm start
     healthCheckPath: /healthz
+    disk:
+      name: decision-log
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
       - key: NODE_VERSION
         value: "22"
@@ -25,5 +29,9 @@ services:
         value: hi
       - key: ATOMS_AGENT_ID
         value: 6ad32773e1ae60d96042155b
+      - key: LOG_DIR
+        value: /var/data
+      - key: PRONUNCIATION_DICT_ID
+        value: 6ad33cc709a020f29d2e0922
       - key: DEFAULT_ENGINE
         value: atoms # Atoms voice agent; "direct" = Pulse + scripted agent

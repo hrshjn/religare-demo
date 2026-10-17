@@ -6,6 +6,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, WebSocket } from 'ws';
 import { processTurn } from './lib/pipeline.js';
+import { logEntry, summarizeTurn, readLog, sessions, LOG_FILE } from './lib/turnlog.js';
 import { FIELDS, SCRIPT, LINES, CONCERNS, POLICY } from './lib/schema.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -22,6 +23,7 @@ const STATIC = {
   '/app.js': 'public/app.js',
   '/mic-worklet.js': 'public/mic-worklet.js',
   '/styles.css': 'public/styles.css',
+  '/logs': 'public/logs.html',
   '/vendor/agent-sdk.js': 'node_modules/@smallest-ai/agent-sdk/dist/agent-sdk.browser.js',
 };
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
@@ -77,12 +79,26 @@ const routes = {
   'POST /api/turn': async (req) => {
     const body = await readJson(req);
     if (!body.utterance?.trim()) return { form: body.form || {}, changes: [], missing: [], jev: null };
-    return processTurn(body);
+    try {
+      const result = await processTurn(body);
+      logEntry(summarizeTurn(body, result));
+      return result;
+    } catch (e) {
+      logEntry(summarizeTurn(body, null, e));
+      throw e;
+    }
+  },
+
+  // Decision log for reviewing and improving the agent.
+  'GET /api/logs': async (req) => {
+    const u = new URL(req.url, 'http://x');
+    const session = u.searchParams.get('session');
+    return session ? readLog({ session, limit: 1000 }) : { sessions: sessions(), file: LOG_FILE };
   },
 
   // Stand-in for the lender's LOS / CRM / ERP endpoint.
   'POST /api/push': async (req) => {
-    const { target = 'los', application } = await readJson(req);
+    const { target = 'los', application, session } = await readJson(req);
     const receipt = {
       status: 201,
       target,
@@ -91,6 +107,7 @@ const routes = {
       idempotency_key: crypto.randomUUID(),
     };
     pushed.push({ receipt, application });
+    logEntry({ type: 'push', session, target, application_id: receipt.application_id, application });
     console.log(`[push → ${target}]`, receipt.application_id);
     return receipt;
   },
@@ -165,8 +182,8 @@ async function tts(req, res) {
       headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json', Accept: 'audio/wav' },
       body: JSON.stringify({
         text,
-        voice_id: process.env.TTS_VOICE || 'srishti',
-        model: process.env.TTS_MODEL || 'lightning_v3.1',
+        voice_id: process.env.TTS_VOICE || 'rhea',
+        model: process.env.TTS_MODEL || 'lightning_v3.1_pro',
         language: 'hi',
         sample_rate: 24000,
         output_format: 'wav',
@@ -212,6 +229,10 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   if (url.pathname === '/favicon.ico') return res.writeHead(204).end();
+  if (url.pathname === '/api/logs.jsonl') {
+    res.writeHead(200, { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Content-Disposition': 'attachment; filename="religare-demo-turns.jsonl"' });
+    return res.end(readLog({ limit: 100000 }).map((r) => JSON.stringify(r)).join('\n') + '\n');
+  }
   const file = STATIC[url.pathname];
   if (req.method === 'GET' && file) {
     res.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-store' });

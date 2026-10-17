@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Decision Log</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root { --ink: #111214; --ink-2: #3a3d42; --muted: #74787e; --line: #e7e8ea; --card: #f6f7f7; --accent: #2e8b67; --fresh: #e2f1eb; --warn: #a8660c; --warn-bg: #fbf1e1; --bad: #b3261e; --bad-bg: #fbe9e7; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 14px/1.45 Inter, ui-sans-serif, system-ui, sans-serif; color: var(--ink); background: #fff; }
+    header { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; padding: 20px max(16px, 3vw) 12px; border-bottom: 1px solid var(--line); }
+    h1 { font-size: 20px; margin: 0; font-weight: 600; }
+    a { color: var(--accent); }
+    .wrap { display: grid; grid-template-columns: 320px minmax(0, 1fr); min-height: calc(100vh - 60px); }
+    aside { border-right: 1px solid var(--line); overflow-y: auto; max-height: calc(100vh - 60px); }
+    .sess { padding: 10px 16px; border-bottom: 1px solid #f1f1f2; cursor: pointer; }
+    .sess:hover, .sess.on { background: var(--card); }
+    .sess .id { font: 12px ui-monospace, Menlo, monospace; color: var(--ink-2); word-break: break-all; }
+    .sess .meta { color: var(--muted); font-size: 12px; margin-top: 2px; display: flex; gap: 8px; flex-wrap: wrap; }
+    main { padding: 16px max(16px, 2vw) 40px; overflow-x: auto; }
+    .muted { color: var(--muted); }
+    .turn { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; }
+    .turn.miss { border-color: #f0d7ae; background: #fffaf2; }
+    .turn.err { border-color: #f3c3be; background: #fff7f6; }
+    .q { color: var(--accent); font-size: 13px; }
+    .heard { font-size: 16px; margin: 4px 0; }
+    .rom { color: var(--muted); font-size: 13px; }
+    .row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; align-items: center; }
+    .lab { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-right: 4px; }
+    .chip { font-size: 12px; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); background: #fff; }
+    .chip.ok { border-color: #b9dccd; background: var(--fresh); color: var(--accent); }
+    .chip.warn { border-color: #f0d7ae; background: var(--warn-bg); color: var(--warn); }
+    .chip.bad { border-color: #f3c3be; background: var(--bad-bg); color: var(--bad); }
+    .push { border: 1px dashed #cfd2d6; border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; }
+    pre { white-space: pre-wrap; font: 12px/1.45 ui-monospace, Menlo, monospace; margin: 6px 0 0; color: var(--ink-2); }
+    @media (max-width: 800px) { .wrap { grid-template-columns: 1fr; } aside { max-height: 35vh; border-right: 0; border-bottom: 1px solid var(--line); } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Decision log</h1>
+    <div class="muted">Every owner turn: what Pulse heard → candidates → Jev's picks → what the form got · <a href="/api/logs.jsonl">Download JSONL</a> · <a href="/">Back to demo</a></div>
+  </header>
+  <div class="wrap">
+    <aside id="sessions"><div class="sess muted">Loading…</div></aside>
+    <main id="detail"><p class="muted">Pick a session on the left. Amber turns mention a number or duration but changed no field; red turns hit an error.</p></main>
+  </div>
+  <script>
+    const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const pct = (p) => (p == null ? '' : ` ${Math.round(p * 100)}%`);
+    const IGNORE = new Set(['not_mentioned', 'none', 'other']);
+
+    async function load() {
+      const { sessions } = await fetch('/api/logs').then((r) => r.json());
+      const box = document.getElementById('sessions');
+      if (!sessions.length) { box.innerHTML = '<div class="sess muted">No sessions yet. Run a call or a rehearsal.</div>'; return; }
+      box.innerHTML = sessions.map((s) => `<div class="sess" data-id="${esc(s.session)}">
+        <div class="id">${esc(s.session)}</div>
+        <div class="meta"><span>${esc(s.engine || '')}</span><span>${new Date(s.started).toLocaleString()}</span></div>
+        <div class="meta"><span>${s.turns} turns</span><span>${s.filled}/14 filled</span>${s.misses ? `<span style="color:var(--warn)">${s.misses} possible misses</span>` : ''}${s.errors ? `<span style="color:var(--bad)">${s.errors} errors</span>` : ''}${s.pushed ? '<span style="color:var(--accent)">sent</span>' : ''}</div></div>`).join('');
+      box.querySelectorAll('.sess').forEach((el) => el.addEventListener('click', () => show(el.dataset.id, el)));
+      const first = box.querySelector('.sess'); if (first) show(first.dataset.id, first);
+    }
+
+    async function show(id, el) {
+      document.querySelectorAll('.sess.on').forEach((x) => x.classList.remove('on'));
+      el.classList.add('on');
+      const rows = await fetch('/api/logs?session=' + encodeURIComponent(id)).then((r) => r.json());
+      document.getElementById('detail').innerHTML = rows.map((r) => {
+        if (r.type === 'push') return `<div class="push"><b>Sent to ${esc(r.target)}</b> · ${esc(r.application_id)} <span class="muted">${new Date(r.ts).toLocaleTimeString()}</span><details><summary class="muted">Payload</summary><pre>${esc(JSON.stringify(r.application, null, 2))}</pre></details></div>`;
+        const applied = Object.entries(r.applied || {});
+        const miss = !r.error && !applied.length && /\d|lakh|crore|लाख|करोड़|साल|saal/i.test(r.heard || '');
+        const picks = Object.entries(r.decisions || {}).filter(([, d]) => (d.pick && !IGNORE.has(d.pick)) || (d.yes != null && d.yes >= 0.5));
+        return `<div class="turn ${r.error ? 'err' : miss ? 'miss' : ''}">
+          <div class="q">Agent: ${esc(r.agent_question || '—')}</div>
+          <div class="heard">${esc(r.heard)}</div>
+          ${r.romanized ? `<div class="rom">${esc(r.romanized)}</div>` : ''}
+          ${r.error ? `<div class="row"><span class="chip bad">${esc(r.error)}</span></div>` : `
+          <div class="row"><span class="lab">Candidates</span>${(r.candidates || []).map((c) => `<span class="chip">${esc(c.kind)} · ${esc(c.text)}</span>`).join('') || '<span class="muted">none</span>'}</div>
+          <div class="row"><span class="lab">Jev picked</span>${picks.map(([k, d]) => `<span class="chip">${esc(k)} → ${esc(d.pick ?? 'yes')}${pct(d.p ?? d.yes)}</span>`).join('') || '<span class="muted">nothing specific</span>'}</div>
+          <div class="row"><span class="lab">Applied</span>${applied.map(([f, v]) => `<span class="chip ${v.confirm ? 'warn' : 'ok'}">${esc(f)} = ${esc(v.value)}${pct(v.p)}</span>`).join('') || `<span class="chip ${miss ? 'warn' : ''}">no field changed</span>`}${r.concern ? `<span class="chip">asked: ${esc(r.concern)}</span>` : ''}</div>
+          <div class="row muted" style="font-size:12px">Jev ${r.jev_ms ?? '?'} ms · $${(r.cost_usd ?? 0).toFixed(6)} · ${new Date(r.ts).toLocaleTimeString()}</div>`}
+        </div>`;
+      }).join('') || '<p class="muted">No turns.</p>';
+    }
+    load();
+  </script>
+</body>
+</html>

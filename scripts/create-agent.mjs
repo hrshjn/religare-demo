@@ -92,7 +92,7 @@ const CONFIG = {
     ],
   },
   language: { default: 'hi', supported: ['hi', 'en'], switching: { isEnabled: true, minWordsForDetection: 2, strongSignalThreshold: 0.7, weakSignalThreshold: 0.3, minConsecutiveForWeakThresholdSwitch: 2 } },
-  synthesizer: { voiceConfig: { model: 'waves_lightning_v3_1', voiceId: process.env.ATOMS_VOICE_ID || 'srishti', gender: 'female' }, speed: 1.05, sampleRate: 24000 },
+  synthesizer: { voiceConfig: { model: 'waves_lightning_v3_1_pro', voiceId: process.env.ATOMS_VOICE_ID || 'rhea', gender: 'female' }, speed: 1.05, sampleRate: 24000 },
   pronunciationDicts: PRONUNCIATIONS.map(([word, pronunciation]) => ({ word, pronunciation })),
   muteUserUntilFirstBotResponse: true,
   waitForUserToSpeakFirst: false,
@@ -151,7 +151,11 @@ const pub = await j('POST', `/agent/${agentId}/branches/${main}/draft/publish`, 
 console.log('publish', pub.data?.state, '(security scan runs before it goes live)');
 for (let i = 0; i < 60; i++) {
   const live = (await j('GET', `/agent/${agentId}`)).data._resolvedConfig;
-  if (live.prompt === PROMPT) { console.log('live: new prompt and settings are serving'); process.exit(0); }
+  const voice = live.synthesizerArgs?.voiceId;
+  if (live.prompt === PROMPT && voice === CONFIG.synthesizer.voiceConfig.voiceId && live.firstMessage === FIRST) {
+    console.log(`live: new prompt, first message and voice (${live.synthesizerType}/${voice}) are serving`);
+    process.exit(0);
+  }
   await new Promise((r) => setTimeout(r, 3000));
 }
 console.log('still scanning after 3 minutes; check the dashboard');
