@@ -95,7 +95,18 @@ const routes = {
       const events = [];
       let audioBytes = 0;
       const ws = new WebSocket(url);
-      const done = (result) => { try { ws.terminate(); } catch {} resolve({ ...result, events, agent_audio_seconds: +(audioBytes / 48000).toFixed(1) }); };
+      let callId = null;
+      const done = async (result) => {
+        try { ws.terminate(); } catch {}
+        let log = null;
+        if (callId) {
+          await new Promise((r) => setTimeout(r, 3000));
+          const c = await fetch(`${ATOMS}/conversation/${callId}`, { headers: { Authorization: `Bearer ${KEY}` } }).then((x) => x.json()).catch((e) => ({ error: e.message }));
+          const d = c.data || c;
+          log = { status: d.status, disconnectionReason: d.disconnectionReason ?? d.disconnection_reason, duration: d.duration, transcript: (d.transcript || []).slice(0, 4), errors: d.errors ?? d.error };
+        }
+        resolve({ ...result, call_id: callId, events, agent_audio_seconds: +(audioBytes / 48000).toFixed(1), call_log: log });
+      };
       ws.on('unexpected-response', (_, r) => { let b = ''; r.on('data', (x) => (b += x)); r.on('end', () => done({ connected: false, status: r.statusCode, body: b })); });
       ws.on('error', (e) => done({ connected: false, error: e.message }));
       ws.on('open', () => {
@@ -107,7 +118,10 @@ const routes = {
       ws.on('message', (d) => {
         const e = JSON.parse(d);
         if (e.type === 'output_audio.delta') audioBytes += Buffer.from(e.audio || '', 'base64').length;
-        else if (events.length < 12) events.push({ type: e.type, role: e.role, text: e.text });
+        else {
+          if (e.type === 'session.created') callId = e.call_id;
+          if (events.length < 12) events.push(JSON.stringify(e).slice(0, 300));
+        }
       });
     });
   },
