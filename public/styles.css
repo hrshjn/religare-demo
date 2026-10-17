@@ -35,6 +35,7 @@ body {
 }
 
 .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; }
+.top > div { min-width: 0; }
 .eyebrow, .section-title {
   text-transform: uppercase;
   letter-spacing: .08em;

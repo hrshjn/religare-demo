@@ -371,6 +371,7 @@ async function runDirect() {
     }
     const pre = [];
     if (r?.concern && CFG.concerns[r.concern]) pre.push(CFG.concerns[r.concern].reply);
+    else if (r?.changes?.includes('requested_amount')) pre.push(`Ji, ${S.form.requested_amount.display.replace('₹', '')}${r.corrected ? ', update kar diya' : ''}.`);
     else if (r?.corrected) pre.push(CFG.lines.ack_correction);
     else if (r?.changes?.length) pre.push(CFG.lines.ack[S.jevTurns % CFG.lines.ack.length]);
 
@@ -407,9 +408,21 @@ async function runAtoms() {
     if (tok.error) throw new Error(tok.error);
     const agent = new window.AtomsSdk.AtomsAgent({ apiKey: tok.access_token, agentId: tok.agentId });
     S.agent = agent;
+    // SDK 0.4.0 has no hooks for streaming deltas or client tools, so wrap its
+    // event handler: show live captions, and answer the agent's
+    // get_captured_fields client tool from the form Jev is filling.
     const orig = agent.handleEvent?.bind(agent);
     if (orig) agent.handleEvent = (evt) => {
       if (evt && /delta/.test(evt.type || '') && evt.type !== 'output_audio.delta' && typeof evt.text === 'string') showLive(evt.role === 'user' ? 'owner' : 'agent', evt.text);
+      if (evt?.type === 'function_call' && evt.name === 'get_captured_fields') {
+        S.queue.then(() => {
+          const captured = Object.fromEntries(CFG.fields.filter(([k]) => S.form[k]).map(([k, l]) => [l, S.form[k].display]));
+          const missing = CFG.fields.filter(([k]) => !S.form[k]).map(([, l]) => l);
+          agent.send({ type: 'function_call.result', call_id: evt.call_id, output: JSON.stringify({ captured, missing }) });
+          const last = document.querySelector('#transcript .turn:last-child');
+          tag(last, `agent checked form · ${missing.length} missing`, 'ask');
+        });
+      }
       orig(evt);
     };
     agent.on('session_started', (e) => { S.callId = e.call_id; setState('live', 'Live · listening'); });

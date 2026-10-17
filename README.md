@@ -46,6 +46,25 @@ Open the page in **Chrome on localhost**. The browser only allows microphone acc
 
 Hover over any filled field to highlight the sentence it came from.
 
+## Atoms agent (best-practice config)
+
+`node scripts/create-agent.mjs` writes the whole agent config to the Main branch draft, checks the draft's resolved config, then publishes it. Use `--dry-run` to stop before publishing. It follows docs.smallest.ai/voice-agents:
+
+- **Prompt** goes in `singlePromptConfig.prompt`. `globalPrompt` is read only by workflow-graph agents, so the first version of this agent was silently running the template prompt. The prompt uses sections: Role & Objective, Personality & Tone, Instructions, Conversation Flow, Borrower questions, Close, Guardrails, Tools. It asks one question per turn and repeats amounts and GST or pincode digits back. It is generated from `lib/schema.js`, so it matches Direct mode exactly.
+- **Client tool `get_captured_fields`** is defined inline. The agent calls it after the first answer, whenever the owner volunteers several details, and before Close. The page answers with what Jev has already captured, so the agent skips questions that are already answered. The transcript shows "agent checked form".
+- **`end_call`** has a specific description (only after Close and goodbye), because the docs warn that vague descriptions cause early hang-ups.
+- **Noisy-room speech settings:**
+  - denoising on
+  - voice detection `confidence 0.78`, `minVolume 0.65`, `releaseTimeInSecs 0.4`
+  - smart turn on with a 2 s wait
+  - interruptions on with a 1 s backoff
+  - user muted until the agent's first line
+
+  If the crowd keeps cutting the agent off, set `allowInterruptions: false`.
+- **Redaction off.** It masks names and numbers, which the form needs.
+- **Hindi + English** with language switching, the `srishti` voice (Hindi-recommended), and the Asia/Kolkata timezone.
+- **Five post-call metrics**: loan amount, purpose, bank account type, top borrower concern, consent. Each has a sentinel value ("unknown", 0, false) so a metric can't fail validation and drop the whole result.
+
 ## Measured (this build, Oct 17 2026)
 
 - **Real audio (synthetic Hindi voice) → Pulse `hi` → Jev**: all 14 fields filled on the kirana script (`test/audio-e2e.mjs`). Jev took 105–375 ms per turn. The first Pulse partial arrived about 1.2 s after audio started.
