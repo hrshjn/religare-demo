@@ -23,6 +23,10 @@ Jev does not generate text. It answers Choice, Noul (yes/no) and Score questions
 
 ## Run it locally
 
+**Quickest:** install Node.js LTS from nodejs.org, then double-click `start-mac.command` (macOS; if it's blocked, right-click → Open) or `start-windows.bat` (Windows). The script installs dependencies on first run, starts the server and opens Chrome at http://localhost:8787.
+
+Manual:
+
 ```bash
 cp .env.example .env      # add both keys
 npm install
