@@ -98,7 +98,12 @@ const routes = {
       const done = (result) => { try { ws.terminate(); } catch {} resolve({ ...result, events, agent_audio_seconds: +(audioBytes / 48000).toFixed(1) }); };
       ws.on('unexpected-response', (_, r) => { let b = ''; r.on('data', (x) => (b += x)); r.on('end', () => done({ connected: false, status: r.statusCode, body: b })); });
       ws.on('error', (e) => done({ connected: false, error: e.message }));
-      ws.on('open', () => setTimeout(() => done({ connected: true }), 8000));
+      ws.on('open', () => {
+        // Stream silence like an idle mic so the pipeline starts, then wait for the greeting.
+        const silence = Buffer.alloc(4800).toString('base64'); // 100 ms @ 24 kHz
+        const tick = setInterval(() => ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: silence })), 100);
+        setTimeout(() => { clearInterval(tick); done({ connected: true }); }, 14000);
+      });
       ws.on('message', (d) => {
         const e = JSON.parse(d);
         if (e.type === 'output_audio.delta') audioBytes += Buffer.from(e.audio || '', 'base64').length;
