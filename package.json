@@ -1,0 +1,22 @@
+{
+  "name": "religare-mse-voice-demo",
+  "version": "1.0.0",
+  "description": "Live Hinglish SME loan capture: Pulse STT + Jev decisions",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test/script-run.mjs kirana",
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@smallest-ai/agent-sdk": "^0.4.0",
+    "dotenv": "^16.6.1",
+    "ws": "^8.22.0"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  }
+}

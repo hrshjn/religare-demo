@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SME Loan Capture</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="stage">
+    <header class="top">
+      <div>
+        <div class="eyebrow">Demo · MSE business-loan application · Hindi + English</div>
+        <h1 id="headline">Bolkar business loan apply kijiye.</h1>
+      </div>
+      <div class="brand" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="28" height="28"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 9c4-5 12-5 16 0"/><path d="M6 12c3-3.5 9-3.5 12 0"/><path d="M8 15c2-2 6-2 8 0"/><path d="M10 18c1-.8 3-.8 4 0"/></g></svg>
+      </div>
+    </header>
+
+    <section class="cols">
+      <!-- Left: live call -->
+      <div class="col call">
+        <div class="col-head">
+          <span class="section-title">Call · Agent and SME owner</span>
+          <span class="head-right"><span id="meter" class="meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span><span id="callState" class="state idle"><i></i><b>Not connected</b></span></span>
+        </div>
+        <div id="transcript" class="transcript">
+          <div class="empty">
+            <p>Press <b>Start call</b> and answer the agent's questions out loud.</p>
+            <p class="muted">Try mixing English and Hindi, giving numbers in lakh and crore, or correcting yourself.</p>
+          </div>
+        </div>
+        <div id="live" class="live hidden"><span class="who"></span><span class="txt"></span></div>
+      </div>
+
+      <!-- Right: captured application -->
+      <div class="col app">
+        <div class="col-head">
+          <span class="section-title">Captured application</span>
+          <span id="appBadge" class="badge">Waiting</span>
+        </div>
+        <div id="grid" class="grid"></div>
+        <div id="summary" class="summary"></div>
+        <div class="needed">
+          <div class="needed-label">Still needed</div>
+          <div id="chips" class="chips"></div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="bar">
+      <div class="left">
+        <button id="btnCall" class="btn primary">Start call</button>
+        <select id="engine" class="select" aria-label="Voice engine"></select>
+        <button id="btnPtt" class="btn ghost" title="Hold Space to talk">Open mic</button>
+        <button id="btnRehearse" class="btn ghost">Rehearse</button>
+        <button id="btnReset" class="btn link">Reset</button>
+      </div>
+      <div class="right">
+        <button id="btnJev" class="btn link">Decisions</button>
+        <select id="target" class="select" aria-label="Push target">
+          <option value="webhook">Credit team · webhook (JSON)</option>
+          <option value="crm">CRM · lead + opportunity</option>
+          <option value="los">LOS · application API</option>
+          <option value="oracle_fusion">Oracle Fusion · REST</option>
+        </select>
+        <button id="btnPush" class="btn primary" disabled>Send to credit team</button>
+      </div>
+    </footer>
+  </main>
+
+  <!-- Jev decisions drawer -->
+  <aside id="drawer" class="drawer hidden" aria-label="Jev decisions">
+    <div class="drawer-head">
+      <div>
+        <div class="section-title">Decision layer</div>
+        <div id="jevMeta" class="muted small">No turns yet</div>
+      </div>
+      <button class="btn link" data-close>Close</button>
+    </div>
+    <div id="jevBody" class="drawer-body"></div>
+  </aside>
+
+  <!-- Push modal -->
+  <div id="modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div>
+          <div class="section-title" id="modalTitle">Pushing application</div>
+          <div id="modalSub" class="muted small"></div>
+        </div>
+        <button class="btn link" data-close>Close</button>
+      </div>
+      <div class="steps" id="steps"></div>
+      <pre id="payload" class="payload"></pre>
+    </div>
+  </div>
+
+  <script src="/vendor/agent-sdk.js"></script>
+  <script src="/app.js" type="module"></script>
+</body>
+</html>

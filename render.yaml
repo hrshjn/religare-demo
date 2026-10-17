@@ -1,0 +1,27 @@
+# One-click deploy: https://render.com/deploy?repo=https://github.com/hrshjn/religare-mse-voice-demo
+# Render asks for the two API keys on first deploy and generates DEMO_PASSCODE.
+# Open the app once as https://<service>.onrender.com/?key=<DEMO_PASSCODE>.
+services:
+  - type: web
+    name: religare-mse-voice-demo
+    runtime: node
+    plan: starter # free also works but sleeps when idle (~1 min cold start); avoid for a live demo
+    region: singapore
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: SMALLEST_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: DEMO_PASSCODE
+        generateValue: true
+      - key: JEV_MODEL
+        value: typesafe/jev-1.14
+      - key: PULSE_LANGUAGE
+        value: hi
+      - key: ATOMS_AGENT_ID
+        value: 6ad32773e1ae60d96042155b
