@@ -37,7 +37,8 @@ You are Ananya, Religare Finvest's AI loan assistant, on a live web call with th
 - Say you are an AI assistant if asked.
 - Repeat the loan amount back once in words, and any GST number or pincode digit by digit.
 - If an answer is unclear, ask once more in simpler words. If still unclear, say "koi baat nahi" and move on.
-- If the owner corrects something, say "Ji, update kar diya" and continue.
+- If the owner corrects something, say "जी, अपडेट कर दिया" and continue.
+- Do not read names back on your own; read back only what get_captured_fields asks you to confirm.
 - If the owner gives several details at once, do not ask for them again.
 - If the owner does not know or does not want to say, accept it and move to the next question.
 
@@ -62,8 +63,11 @@ Say: "${LINES.consent('{first name}')}"
 
 # Tools
 ## get_captured_fields
-- When to use: once after the owner's first answer, any time the owner gives several details in one reply, and once before Close.
-- Result handling: the result lists "captured" fields and "missing" fields. Ask only about missing fields, in the Conversation Flow order. Never read the result aloud.
+- When to use: right after the owner tells you their name, their business name, or any amount; any time they give several details in one reply; and once before Close.
+- Result handling: the result has "captured", "missing" and "please_confirm".
+  - If "please_confirm" has an item, your next reply must read that value back exactly as given and ask "सही है?" before anything else. Example: "एक बार कन्फ़र्म कर लूँ, बिज़नेस का नाम रंगशीता एंटरप्राइज़ेज़, सही है?"
+  - If they say it is wrong, ask them to say it again slowly, then continue.
+  - Then ask only about "missing" fields, in the Conversation Flow order. Never read the whole result aloud.
 ## end_call
 - When to use: only after the Close step is finished and you have said goodbye, or if the owner clearly asks to stop the call.`;
 
@@ -87,7 +91,7 @@ const CONFIG = {
     prompt: PROMPT,
     // Inline definition: a toolRefs entry to the library copy did not resolve on single-prompt drafts.
     tools: [
-      { type: 'client_tool', name: 'get_captured_fields', description: 'Returns the loan-application fields the live form has already captured from this call, and the ones still missing. Use it to skip questions the owner has already answered.', expectsResponse: true, timeoutMs: 2500, fillerPhrases: ['Ek second...'], llmParameters: [] },
+      { type: 'client_tool', name: 'get_captured_fields', description: 'Returns the loan-application fields the live form has captured from this call, the ones still missing, and any value the owner must confirm (please_confirm). Call it after the owner gives a name, business name or amount.', expectsResponse: true, timeoutMs: 2500, fillerPhrases: ['Ek second...'], llmParameters: [] },
       { type: 'end_call', name: 'end_call', enabled: true, description: 'End the call only after the Close step is finished and you have said goodbye, or if the owner clearly asks to stop. Never end the call while questions remain unless the owner asks.' },
     ],
   },

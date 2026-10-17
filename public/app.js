@@ -12,30 +12,13 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 
 let CFG = null;
 
-const REHEARSAL = [
-  'Mujhe pachas lakh chahiye. Nahi nahi, chalis lakh kar dijiye.',
-  'Diwali ke liye stock lena hai, maal bharna hai dukaan mein.',
-  'Mera naam Ramesh Gupta hai, Gupta General Store naam se dukaan hai.',
-  'Kirana ki wholesale aur retail dono, Lucknow mein. Pincode two two six zero one six.',
-  'Akela hi chalata hoon, proprietor hoon.',
-  'Barah saal ho gaye.',
-  'Mahine ka lagbhag aath lakh ka maal bikta hai.',
-  'Savings account hai SBI mein. Savings account se chalega na?',
-  'GST hai, Udyam ka pata nahi.',
-  'Haan, teen saal se ITR bharta hoon.',
-  'Bajaj se ek loan hai, pandrah hazaar EMI jaati hai.',
-  'Dukaan kiraye ki hai, par ghar apna hai.',
-  'Bees pachchis hazaar tak de sakta hoon. Rate kitna lagega?',
-  'Haan ji, bhej dijiye.',
-];
-
 const S = {
   history: [], form: {}, fresh: new Set(), assessment: null, concerns: [],
   queue: Promise.resolve(),
   running: false, mode: 'direct', ptt: false, submitted: false,
   askCount: {}, step: null, awaitingConsent: false,
   lastJev: null, jevTurns: 0, callId: null, session: null,
-  agent: null, mic: null, listenCtl: null, rehearsing: false, speakingAudio: null,
+  agent: null, mic: null, listenCtl: null, speakingAudio: null,
 };
 
 // ---------------- rendering ----------------
@@ -141,7 +124,7 @@ async function processOwner(text) {
       const r = await fetch('/api/turn', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ utterance: text, history, form: S.form, turn: turnIdx, session: S.callId || S.session, engine: S.rehearsing ? 'rehearsal' : S.mode === 'atoms' ? 'atoms' : 'direct:' + ($('#engine').value.split(':')[1] || 'hi') }),
+        body: JSON.stringify({ utterance: text, history, form: S.form, turn: turnIdx, confirming: S.pendingConfirm, session: S.callId || S.session, engine: S.mode === 'atoms' ? 'atoms' : 'direct:' + CFG.pulseLanguage }),
       }).then((x) => x.json());
       if (r.error) throw new Error(r.error);
       S.form = r.form;
@@ -150,6 +133,10 @@ async function processOwner(text) {
       if (r.concern_label && !S.concerns.includes(r.concern_label)) S.concerns.push(r.concern_label);
       S.lastJev = { ...r.jev, utterance: text };
       S.jevTurns++;
+      S.toConfirm = r.to_confirm || [];
+      if (r.confirm_result === 'confirmed') tag(el, `confirmed ${S.pendingConfirm?.label || ''}`);
+      S.lastConfirm = S.pendingConfirm;
+      S.pendingConfirm = null;
       if (r.corrected) tag(el, 'correction');
       if (r.concern_label) tag(el, r.concern_label, 'ask');
       renderGrid();
@@ -197,12 +184,6 @@ const loadVoices = () => { voices = speechSynthesis.getVoices(); };
 if ('speechSynthesis' in window) { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
 
 async function speak(text) {
-  if (S.rehearsing) {
-    // Rehearsal is silent: agent lines are shown, not spoken.
-    addTurn('agent', text);
-    setState('agent', 'Agent');
-    return sleep(600 + text.length * 12);
-  }
   addTurn('agent', text);
   setState('agent', 'Agent speaking');
   showLive(null, '');
@@ -266,7 +247,7 @@ function closeMic() {
 function listenOnce() {
   return new Promise(async (resolve) => {
     const mic = await openMic();
-    const lang = $('#engine').value.split(':')[1] || CFG.pulseLanguage;
+    const lang = CFG.pulseLanguage;
     const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/stt?language=${lang}`);
     ws.binaryType = 'arraybuffer';
     const finals = [];
@@ -341,7 +322,7 @@ async function runDirect() {
   S.running = true;
   setCallUi(true);
   try {
-    if (!S.rehearsing) await openMic();
+    await openMic();
   } catch (e) {
     alert('Microphone not available: ' + e.message);
     return stopCall();
@@ -353,7 +334,7 @@ async function runDirect() {
   while (S.running) {
     await speak(line);
     if (!S.running) break;
-    const heard = await (S.rehearsing ? rehearsalLine() : listenOnce());
+    const heard = await listenOnce();
     if (!S.running) break;
     if (!heard) {
       if (++silentTries >= 2) { line = 'Lagta hai aawaaz nahi aa rahi. Main baad mein call karti hoon. Dhanyavaad!'; await speak(line); break; }
@@ -375,6 +356,20 @@ async function runDirect() {
     else if (r?.corrected) pre.push(CFG.lines.ack_correction);
     else if (r?.changes?.length) pre.push(CFG.lines.ack[S.jevTurns % CFG.lines.ack.length]);
 
+    // Anything captured under 90% (and every name spelled from Hindi script) is read
+    // back once before moving on. "Haan" locks it in; a correction replaces it.
+    if (r?.confirm_result === 'rejected') {
+      line = `Maaf kijiye. Sahi ${spokenLabel(S.lastConfirm?.field)} ek baar phir bata dijiye?`;
+      continue;
+    }
+    const nextConfirm = (r?.to_confirm || []).find((c) => !S.confirmAsked.has(c.field + '|' + c.value));
+    if (nextConfirm) {
+      S.confirmAsked.add(nextConfirm.field + '|' + nextConfirm.value);
+      S.pendingConfirm = nextConfirm;
+      line = [...pre, confirmLine(nextConfirm)].join(' ');
+      continue;
+    }
+
     const answeredCurrent = step && step.fields.every((f) => S.form[f]);
     if (!answeredCurrent && step && r && !r.answered && (S.askCount[step.key] || 0) < 2) {
       S.askCount[step.key]++;
@@ -392,6 +387,16 @@ async function runDirect() {
   }
   stopCall(true);
 }
+
+const SPOKEN_LABELS = {
+  applicant_name: 'aapka naam', business: 'business ka naam', requested_amount: 'loan amount', turnover: 'turnover',
+  existing_emi: 'abhi ki EMI', emi_comfort: 'comfortable EMI', location: 'sheher', vintage: 'business kab se hai',
+  gst_udyam: 'GST aur Udyam', bank_account: 'bank account', constitution: 'business ka type', loan_purpose: 'loan ka purpose',
+  itr: 'ITR', collateral: 'property',
+};
+const spokenLabel = (field) => SPOKEN_LABELS[field] || 'yeh detail';
+const spokenValue = (c) => c.value.split(' · ')[0].replace(/₹/g, '').replace(' / year', ' saal ka').replace(' / month', ' mahine ka').replace('–', ' se ');
+const confirmLine = (c) => `Ek baar confirm kar loon, ${spokenLabel(c.field)} ${spokenValue(c)}. Sahi hai?`;
 
 const consentLine = () => {
   const first = (S.form.applicant_name?.value || '').split(' ')[0];
@@ -418,14 +423,17 @@ async function runAtoms() {
         S.queue.then(() => {
           const captured = Object.fromEntries(CFG.fields.filter(([k]) => S.form[k]).map(([k, l]) => [l, S.form[k].display]));
           const missing = CFG.fields.filter(([k]) => !S.form[k]).map(([, l]) => l);
-          agent.send({ type: 'function_call.result', call_id: evt.call_id, output: JSON.stringify({ captured, missing }) });
+          const please = (S.toConfirm || []).filter((c) => !S.confirmAsked.has(c.field + '|' + c.value)).slice(0, 1);
+          for (const c of please) { S.confirmAsked.add(c.field + '|' + c.value); S.pendingConfirm = c; }
+          const please_confirm = please.map((c) => ({ field: c.label, value: c.value.split(' · ')[0] }));
+          agent.send({ type: 'function_call.result', call_id: evt.call_id, output: JSON.stringify({ captured, missing, please_confirm }) });
           const last = document.querySelector('#transcript .turn:last-child');
-          tag(last, `agent checked form · ${missing.length} missing`, 'ask');
+          tag(last, please.length ? `agent will confirm ${please[0].label}` : `agent checked form · ${missing.length} missing`, 'ask');
         });
       }
       orig(evt);
     };
-    agent.on('session_started', (e) => { S.callId = e.call_id; setState('live', 'Live · listening'); });
+    agent.on('session_started', (e) => { S.callId = e.call_id; S.atomsLive = true; setState('live', 'Live · listening'); });
     agent.on('agent_start_talking', () => setState('agent', 'Agent speaking'));
     agent.on('agent_stop_talking', () => setState('live', 'Live · listening'));
     agent.on('transcript', (e) => {
@@ -435,17 +443,24 @@ async function runAtoms() {
       if (e.role === 'user') processOwner(text).then((r) => r?.consent && !S.submitted && push(true));
       else addTurn('agent', text);
     });
-    agent.on('session_ended', (e) => { setState('', `Call ended${e?.reason ? ' · ' + e.reason : ''}`); stopCall(true); });
+    agent.on('session_ended', (e) => {
+      if (!S.atomsLive || S.mode !== 'atoms') return; // a refused connection: the fallback below takes over
+      S.atomsLive = false;
+      setState('', `Call ended${e?.reason ? ' · ' + e.reason : ''}`);
+      if (S.callId) fetch('/api/archive', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session: S.callId }) }).catch(() => {});
+      stopCall(true);
+    });
     await agent.connect();
     if (S.ptt) agent.mute();
   } catch (e) {
     console.error(e);
-    setState('err', 'Atoms connect failed');
-    stopCall(true);
-    if (confirm(`Atoms call could not start (${e.message}).\n\nSwitch to Direct mode (Pulse + scripted agent) and start?`)) {
-      $('#engine').value = 'direct:' + CFG.pulseLanguage;
-      startCall();
-    }
+    // Fall back to Pulse with the same live mic, without asking the presenter.
+    S.atomsLive = false;
+    try { S.agent?.disconnect(); } catch {}
+    S.agent = null;
+    S.mode = 'direct';
+    setState('', 'Connecting…');
+    runDirect();
   }
 }
 
@@ -455,18 +470,17 @@ function setCallUi(on) {
   const b = $('#btnCall');
   b.textContent = on ? 'End call' : 'Start call';
   b.classList.toggle('end', on);
-  $('#engine').disabled = on;
 }
 
 function startCall() {
   reset();
-  S.mode = $('#engine').value.startsWith('atoms') ? 'atoms' : 'direct';
+  // One live mode: the Atoms agent. Pulse + our own question flow only if Atoms is unavailable.
+  S.mode = CFG.atomsAgentId && CFG.defaultEngine !== 'direct' ? 'atoms' : 'direct';
   S.mode === 'atoms' ? runAtoms() : runDirect();
 }
 
 function stopCall(silent) {
   S.running = false;
-  S.rehearsing = false;
   S.listenCtl?.cancel();
   S.speakingAudio?.pause();
   if ('speechSynthesis' in window) speechSynthesis.cancel();
@@ -474,7 +488,6 @@ function stopCall(silent) {
   S.agent = null;
   closeMic();
   setCallUi(false);
-  $('#btnRehearse').disabled = false;
   if (!silent) setState('', 'Call ended');
   else if (!/ended|failed/.test($('#callState').textContent)) setState('', 'Call ended');
 }
@@ -491,31 +504,6 @@ function talk(down) {
   $('#btnPtt').classList.toggle('talking', down);
   if (S.agent) { down ? S.agent.unmute() : S.agent.mute(); return; }
   S.listenCtl?.talk?.(down);
-}
-
-// ---------------- rehearsal: scripted owner, live agent logic + Jev ----------------
-
-let rehearsalIdx = 0;
-async function rehearsalLine() {
-  const text = REHEARSAL[rehearsalIdx++];
-  if (!text) return '';
-  setState('live', 'Rehearsal · scripted owner');
-  await sleep(400);
-  for (let i = 1; i <= text.length; i += 3) { showLive('owner', text.slice(0, i)); await sleep(16); }
-  await sleep(250);
-  showLive(null, '');
-  return text;
-}
-
-async function rehearse() {
-  if (S.running) return;
-  reset();
-  rehearsalIdx = 0;
-  S.rehearsing = true;
-  S.mode = 'direct';
-  $('#btnRehearse').disabled = true;
-  await runDirect();
-  setState('', 'Rehearsal done');
 }
 
 // ---------------- push ----------------
@@ -592,7 +580,7 @@ async function push(fromConsent = false) {
 // ---------------- wiring ----------------
 
 function reset() {
-  Object.assign(S, { history: [], form: {}, fresh: new Set(), assessment: null, concerns: [], submitted: false, lastJev: null, jevTurns: 0, askCount: {}, awaitingConsent: false, callId: null, session: `web-${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')}-${Math.random().toString(36).slice(2, 6)}` });
+  Object.assign(S, { history: [], form: {}, fresh: new Set(), assessment: null, concerns: [], submitted: false, lastJev: null, jevTurns: 0, askCount: {}, awaitingConsent: false, callId: null, pendingConfirm: null, toConfirm: [], confirmAsked: new Set(), session: `web-${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')}-${Math.random().toString(36).slice(2, 6)}` });
   $('#transcript').innerHTML = `<div class="empty"><p>Press <b>Start call</b>. The agent asks in Hinglish; answer however you like — Hindi, English, or both.</p><p class="muted">Try giving amounts in lakh, correcting yourself, or asking "savings account se chalega?"</p></div>`;
   $('#headline').textContent = 'Bolkar business loan apply kijiye.';
   $('#jevBody').innerHTML = ''; $('#jevMeta').textContent = 'No turns yet';
@@ -603,19 +591,12 @@ function reset() {
 
 async function init() {
   CFG = await fetch('/api/config').then((r) => r.json());
-  const eng = $('#engine');
-  eng.innerHTML = `
-    <option value="direct:hi">Pulse · Hindi</option>
-    <option value="direct:en">Pulse · English</option>
-    ${CFG.atomsAgentId ? '<option value="atoms">Atoms voice agent</option>' : ''}`;
-  eng.value = CFG.defaultEngine === 'atoms' && CFG.atomsAgentId ? 'atoms' : 'direct:' + CFG.pulseLanguage;
   reset();
 
   $('#btnCall').addEventListener('click', () => (S.running || S.agent ? stopCall() : startCall()));
   $('#btnPtt').addEventListener('click', () => setPtt(!S.ptt));
   $('#btnPtt').addEventListener('pointerdown', () => S.ptt && talk(true));
   $('#btnPtt').addEventListener('pointerup', () => S.ptt && talk(false));
-  $('#btnRehearse').addEventListener('click', rehearse);
   $('#btnReset').addEventListener('click', () => { stopCall(true); reset(); });
   $('#btnPush').addEventListener('click', () => push(false));
   $('#btnJev').addEventListener('click', () => $('#drawer').classList.toggle('hidden'));

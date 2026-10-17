@@ -79,9 +79,10 @@
     async function show(id, el) {
       document.querySelectorAll('.sess.on').forEach((x) => x.classList.remove('on'));
       el.classList.add('on');
-      const [rows, rv] = await Promise.all([
+      const [rows, rv, hist] = await Promise.all([
         fetch('/api/logs?session=' + encodeURIComponent(id)).then((r) => r.json()),
         fetch('/api/review?session=' + encodeURIComponent(id)).then((r) => r.json()).catch(() => null),
+        /^CALL-/.test(id) ? fetch('/api/history?session=' + encodeURIComponent(id)).then((r) => r.json()).catch(() => null) : null,
       ]);
       const labelsByTurn = {};
       for (const l of rv?.labels || []) (labelsByTurn[l.turn_ts] ||= []).push(l);
@@ -98,7 +99,14 @@
           ${rv.atoms.summary ? `<div class="muted" style="margin-top:6px">${esc(rv.atoms.summary)}</div>` : ''}` : ''}
         ${rv.labels.length ? `<div class="row"><span class="lab">Flags</span>${rv.labels.map((l) => `<span class="chip warn">${esc(label(l.field))} → ${esc(l.expected || '(should be empty)')}</span>`).join('')}</div>` : ''}
       </div>` : '';
-      document.getElementById('detail').innerHTML = reviewHtml + rows.map((r) => {
+      const convHtml = hist?.lines?.length ? `<details class="review" open><summary><b>Conversation</b> <span class="muted">· ${hist.lines.length} lines from the Atoms call${hist.saved ? ' · saved' : ''}</span></summary>
+        ${hist.lines.map((l) => `<div style="margin:8px 0">
+          <div class="lab" style="color:${l.role === 'agent' ? 'var(--accent)' : 'var(--ink-2)'}">${l.role === 'agent' ? 'Agent' : 'Owner'} <span class="muted">${l.at ? new Date(l.at).toLocaleTimeString() : ''}</span></div>
+          <div>${esc(l.text)}</div>
+          ${l.role === 'owner' ? `<div class="row" style="margin-top:4px">${l.extracted && Object.keys(l.extracted).length ? Object.entries(l.extracted).map(([f, v]) => `<span class="chip ${v.confirm ? 'warn' : 'ok'}">${esc(label(f))} = ${esc(v.value)}${pct(v.p)}</span>`).join('') : `<span class="chip">${l.decided ? 'nothing extracted' : 'not sent to Jev'}</span>`}</div>` : ''}
+        </div>`).join('')}
+      </details>` : '';
+      document.getElementById('detail').innerHTML = reviewHtml + convHtml + rows.map((r) => {
         if (r.type === 'push') return `<div class="push"><b>Sent to ${esc(r.target)}</b> · ${esc(r.application_id)} <span class="muted">${new Date(r.ts).toLocaleTimeString()}</span><details><summary class="muted">Payload</summary><pre>${esc(JSON.stringify(r.application, null, 2))}</pre></details></div>`;
         const applied = Object.entries(r.applied || {});
         const miss = !r.error && !applied.length && /\d|lakh|crore|लाख|करोड़|साल|saal/i.test(r.heard || '');

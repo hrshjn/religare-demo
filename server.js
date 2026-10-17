@@ -6,7 +6,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, WebSocket } from 'ws';
 import { processTurn } from './lib/pipeline.js';
-import { logEntry, summarizeTurn, readLog, sessions, review, addLabel, readLabels, LOG_FILE } from './lib/turnlog.js';
+import { logEntry, summarizeTurn, readLog, sessions, review, addLabel, readLabels, saveCall, readCall, LOG_FILE } from './lib/turnlog.js';
 import { FIELDS, SCRIPT, LINES, CONCERNS, POLICY } from './lib/schema.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -50,6 +50,33 @@ async function readJson(req) {
   let s = '';
   for await (const chunk of req) s += chunk;
   return s ? JSON.parse(s) : {};
+}
+
+// Fetch an Atoms call and shape it for the history view.
+async function fetchAtomsCall(callId) {
+  const c = await fetch(`${ATOMS}/conversation/${encodeURIComponent(callId)}`, { headers: { Authorization: `Bearer ${KEY}` } }).then((x) => x.json()).catch(() => null);
+  const d = c?.data || c;
+  if (!d?.callId) return null;
+  return {
+    session: d.callId,
+    status: d.status,
+    duration: d.duration,
+    disconnection: d.disconnectionReason,
+    recording: d.recordingUrl || null,
+    summary: d.postCallAnalytics?.summary || null,
+    metrics: Object.fromEntries((d.postCallAnalytics?.dispositionMetrics || []).map((x) => [x.identifier, x.value])),
+    transcript: (d.transcript || []).map((t) => ({ role: t.role === 'user' ? 'owner' : 'agent', text: t.content, at: t.timestamp })),
+    tool_calls: (d.events || []).filter((e) => /tool_call/.test(e.eventType)).map((e) => ({ type: e.eventType, at: e.eventTime })),
+  };
+}
+
+// Save a finished call's history once Atoms has its post-call analytics (a few seconds after hang-up).
+function archiveSoon(session, delayMs = 20000) {
+  if (!/^CALL-/.test(session || '')) return;
+  setTimeout(async () => {
+    const call = await fetchAtomsCall(session).catch(() => null);
+    if (call) saveCall({ ...call, final: review(session).final });
+  }, delayMs);
 }
 
 const routes = {
@@ -115,6 +142,31 @@ const routes = {
     return r;
   },
 
+  'POST /api/archive': async (req) => {
+    const { session } = await readJson(req);
+    archiveSoon(session);
+    return { scheduled: !!session };
+  },
+
+  // Full history of one call: what the agent and owner said (Atoms transcript), with
+  // what Jev extracted from each owner line. Saved copy first, live Atoms as fallback.
+  'GET /api/history': async (req) => {
+    const session = new URL(req.url, 'http://x').searchParams.get('session');
+    let call = readCall(session);
+    if (!call && /^CALL-/.test(session || '')) {
+      call = await fetchAtomsCall(session);
+      if (call && call.status !== 'in_progress') saveCall({ ...call, final: review(session).final });
+    }
+    const turns = readLog({ session, limit: 1000 }).filter((r) => r.type === 'turn');
+    const norm = (t) => String(t || '').replace(/\s+/g, ' ').trim();
+    const lines = (call?.transcript || []).map((l) => {
+      if (l.role !== 'owner') return l;
+      const t = turns.find((x) => norm(x.heard) === norm(l.text));
+      return { ...l, extracted: t?.applied || null, decided: !!t };
+    });
+    return { session, saved: !!readCall(session), call: call ? { ...call, transcript: undefined } : null, lines };
+  },
+
   'POST /api/labels': async (req) => {
     const b = await readJson(req);
     if (!b.session || !b.heard || !b.field) throw Object.assign(new Error('session, heard and field are required'), { status: 400 });
@@ -141,6 +193,7 @@ const routes = {
     };
     pushed.push({ receipt, application });
     logEntry({ type: 'push', session, target, application_id: receipt.application_id, application });
+    archiveSoon(session, 30000);
     console.log(`[push → ${target}]`, receipt.application_id);
     return receipt;
   },

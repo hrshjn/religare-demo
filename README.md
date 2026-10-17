@@ -37,14 +37,25 @@ Open the page in **Chrome on localhost**. The browser only allows microphone acc
 
 | Control | What it does |
 |---|---|
-| **Start call** | Direct mode: the scripted Hinglish agent speaks, the mic listens through Pulse, and Jev fills the form. |
-| Engine select | `Pulse · Hindi` (default, best for Hinglish), `Pulse · English`, `Atoms voice agent` |
+| **Start call** | One live mode: the Atoms agent (Rhea voice, Pulse STT) talks to whoever is at the mic and Jev fills the form. If Atoms can't connect, the call carries on automatically with Pulse and the app's own question flow, with no prompt and no choice for the presenter. |
 | **Open mic / Push-to-talk** | In a noisy room switch to push-to-talk, then hold **Space** while the person speaks. |
-| **Rehearse** | Runs a scripted kirana-owner conversation through the real Jev pipeline, with no mic or voice. Use it as the fallback if the network or mic fails. |
 | **Decisions** (or press `d`) | Shows the Jev request behind the latest turn: candidates, every question, probabilities, latency, cost. |
 | **Send to credit team** | Shows the JSON payload and a mock `201 Created` receipt. It also fires on its own when the owner gives consent. |
 
 Hover over any filled field to highlight the sentence it came from.
+
+## Read-back confirmation (under 90%)
+
+Any field captured with less than 90% confidence is read back before the agent moves on: "एक बार कन्फ़र्म कर लूँ, बिज़नेस का नाम …, सही है?". Names spelled from Hindi script are capped at 85% because the spelling is a guess, so they are always confirmed.
+- **"Haan"** locks the value in at 97% and marks it confirmed.
+- **A correction** replaces the value, and the new one is read back if it is still uncertain.
+- **"No"** without a new value makes the agent ask for it again.
+
+In Atoms mode, the `get_captured_fields` tool returns `please_confirm`, and the prompt makes Ananya read it back. Each value is confirmed at most once.
+
+## Call history
+
+When an Atoms call ends, the server waits about 20 s for Atoms' post-call analytics, then saves the full record to `LOG_DIR/calls.jsonl`: every line the agent and the owner said with timestamps, the summary, the post-call metrics, the recording link and the final application Jev built. `/logs` shows this as **Conversation**, with what Jev extracted under each owner line. `GET /api/history?session=CALL-…` returns it. A call made before saving existed is fetched live from Atoms and saved the first time it is opened.
 
 ## Atoms agent (best-practice config)
 
