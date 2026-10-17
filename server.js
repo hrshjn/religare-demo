@@ -292,16 +292,55 @@ async function tts(req, res) {
 const PASS = process.env.DEMO_PASSCODE;
 const authed = (req) => !PASS || (req.headers.cookie || '').split(/;\s*/).includes(`demo_key=${PASS}`);
 
+// Sign-in page for the passcode gate (instead of a bare 401).
+function signInPage(wrong) {
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Religare SME Loan Capture</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root { --ink:#111214; --muted:#74787e; --line:#e7e8ea; --accent:#076533; --bad:#b3261e; }
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; display:grid; place-items:center; background:#fff; color:var(--ink); font:16px/1.45 Inter, ui-sans-serif, system-ui, sans-serif; padding:16px; }
+  .card { width:min(420px,100%); border:1px solid var(--line); border-radius:14px; padding:28px; }
+  img { height:52px; width:auto; display:block; margin-bottom:22px; }
+  h1 { font-size:20px; margin:0 0 6px; font-weight:600; }
+  p { color:var(--muted); margin:0 0 18px; font-size:14px; }
+  label { font-size:13px; color:var(--muted); display:block; margin-bottom:6px; }
+  input { width:100%; font:inherit; padding:11px 12px; border:1px solid var(--line); border-radius:10px; }
+  input:focus { outline:2px solid var(--accent); outline-offset:1px; }
+  button { margin-top:14px; width:100%; font:inherit; font-weight:500; padding:11px; border:0; border-radius:999px; background:var(--ink); color:#fff; cursor:pointer; }
+  .err { color:var(--bad); font-size:14px; margin:10px 0 0; }
+</style></head><body>
+<form class="card" method="get" action="/">
+  <img src="/religare-logo.png" alt="Religare SME Loans">
+  <h1>SME loan capture demo</h1>
+  <p>Enter the demo passcode. This browser stays signed in for 7 days.</p>
+  <label for="key">Passcode</label>
+  <input id="key" name="key" type="password" autocomplete="current-password" required autofocus>
+  ${wrong ? '<div class="err">That passcode is not right. Check it and try again.</div>' : ''}
+  <button type="submit">Open demo</button>
+</form></body></html>`;
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   if (url.pathname === '/healthz') return send(res, 200, { ok: true });
+  if (url.pathname === '/religare-logo.png') {
+    res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
+    return fs.createReadStream(path.join(ROOT, 'public/religare-logo.png')).pipe(res);
+  }
   if (PASS && url.searchParams.get('key') === PASS) {
     res.writeHead(302, { 'Set-Cookie': `demo_key=${PASS}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800`, Location: '/' });
     return res.end();
   }
   if (!authed(req)) {
-    res.writeHead(401, { 'Content-Type': 'text/plain; charset=utf-8' });
-    return res.end('Open the demo link that includes ?key=… to get access.');
+    if (url.pathname.startsWith('/api/') || req.headers.upgrade) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'Passcode required' }));
+    }
+    const wrong = url.searchParams.has('key');
+    res.writeHead(401, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+    return res.end(signInPage(wrong));
   }
   if (req.method === 'POST' && url.pathname === '/api/tts') return tts(req, res);
   const handler = routes[`${req.method} ${url.pathname}`];
