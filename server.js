@@ -98,7 +98,7 @@ const routes = {
 
   // Stand-in for the lender's LOS / CRM / ERP endpoint.
   'POST /api/push': async (req) => {
-    const { target = 'los', application, session } = await readJson(req);
+    const { target = 'los', application, session = 'api' } = await readJson(req);
     const receipt = {
       status: 201,
       target,
