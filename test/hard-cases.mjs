@@ -57,6 +57,15 @@ const CASES = [
   // EMI comfort
   [Q.emi_comfort, 'पचास हज़ार तक दे सकता हूं महीने का।', 'emi_comfort', '₹50,000'],
   [Q.emi_comfort, 'दो-तीन लाख महीना ठीक है।', 'emi_comfort', '₹2–3 lakh'],
+  // From internal demo calls (Oct 17)
+  [Q.applicant_name, 'मेरा नाम राकेश अग्रवाल है और मेरे कब business का नाम अ- अगप्ता जी enterprises है।', 'business', 'Enterprises'],
+  [Q.applicant_name, 'मेरे business का नाम ए रंगशीता enterprises', 'business', 'Rangshita Enterprises'],
+  [Q.applicant_name, 'मेरे मेरा नाम है मुकुंद त्रिपाठी', 'applicant_name', 'Mukund Tripathi'],
+  [Q.bank_account, 'ये मैं ये karur bisia bank के साथ हूँ मैं।', 'bank_account', 'Karur Vysya'],
+  [Q.turnover, 'महीने का तकरीबन कुछ साल का तकरीबन कुछ अ, 10,00,00,000 के आसपास।', 'turnover', '₹10 Cr'],
+  [Q.existing_emi, 'नहीं नहीं actually ₹3,00,000 महीने का है।', 'existing_emi', '₹3 lakh'],
+  [Q.collateral, 'हाँ, factory 1 है पर वो मैं मुझे unsecured ही चाहिए।', 'collateral', 'Industrial'],
+  [Q.requested_amount, '67,00,000', 'requested_amount', '₹67 lakh'],
 ];
 
 // Cases flagged by people on /logs (see test/pull-labels.mjs).

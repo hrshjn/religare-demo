@@ -107,7 +107,7 @@ const routes = {
         if (!r.turns) { r.atoms = { summary: d.postCallAnalytics?.summary, metrics: m, recording: d.recordingUrl || null, duration: d.duration, disconnection: d.disconnectionReason, disagreements, note: 'No decision log for this call (made before logging, or not from this page).' }; return r; }
         if (m.loan_amount_inr && f.requested_amount?.raw && Number(m.loan_amount_inr) !== Number(f.requested_amount.raw)) disagreements.push({ field: 'requested_amount', atoms: m.loan_amount_inr, jev: f.requested_amount.raw });
         if (m.loan_amount_inr && !f.requested_amount) disagreements.push({ field: 'requested_amount', atoms: m.loan_amount_inr, jev: null });
-        if (purposeMap[m.loan_purpose] && f.loan_purpose && !purposeMap[m.loan_purpose].includes(f.loan_purpose.raw)) disagreements.push({ field: 'loan_purpose', atoms: m.loan_purpose, jev: f.loan_purpose.raw });
+        if (purposeMap[m.loan_purpose] && f.loan_purpose?.raw && !purposeMap[m.loan_purpose].includes(f.loan_purpose.raw)) disagreements.push({ field: 'loan_purpose', atoms: m.loan_purpose, jev: f.loan_purpose.raw });
         if (accountMap[m.bank_account_type] && f.bank_account && !accountMap[m.bank_account_type].some((a) => String(f.bank_account.value).toLowerCase().includes(a.split('_')[0]))) disagreements.push({ field: 'bank_account', atoms: m.bank_account_type, jev: f.bank_account.value });
         r.atoms = { summary: d.postCallAnalytics?.summary, metrics: m, recording: d.recordingUrl || null, duration: d.duration, disconnection: d.disconnectionReason, disagreements };
       }
