@@ -398,10 +398,29 @@ const spokenLabel = (field) => SPOKEN_LABELS[field] || 'yeh detail';
 const spokenValue = (c) => c.value.split(' · ')[0].replace(/₹/g, '').replace(' / year', ' saal ka').replace(' / month', ' mahine ka').replace('–', ' se ');
 const confirmLine = (c) => `Ek baar confirm kar loon, ${spokenLabel(c.field)} ${spokenValue(c)}. Sahi hai?`;
 
+// Atoms mode: Pulse can split one answer into several finals ("मेरा नाम है animesh।" then
+// "raj gaikwad।"). Hold fragments until Ananya starts talking (or 1.5 s of quiet) and send
+// them to Jev as one answer, the way Ananya hears them.
+function bufferOwner(text) {
+  S.ownerBuf.push(text.replace(/[।.]\s*$/, ''));
+  clearTimeout(S.ownerTimer);
+  S.ownerTimer = setTimeout(flushOwner, 1500);
+}
+function flushOwner() {
+  clearTimeout(S.ownerTimer);
+  if (!S.ownerBuf.length) return;
+  const text = S.ownerBuf.join(' ').trim();
+  S.ownerBuf = [];
+  processOwner(text).then((r) => r?.consent && !S.submitted && push(true));
+}
+
 // Atoms mode: when Ananya reads a value back ("…सही है?"), remember which field it is,
 // so the owner's next "haan" confirms that field in the form.
 function noteReadBack(text) {
   if (!/सही है\s*\?|sahi hai\s*\?|कन्फ़र्म|कन्फर्म|confirm/i.test(text)) return;
+  // Only the part before the first "सही है" says what is being confirmed
+  // ("आपका नाम अनिमेश, सही है? और बिज़नेस का नाम क्या है?" confirms the name).
+  text = text.split(/सही है|sahi hai/i)[0];
   const field =
     /बिज़नेस का नाम|बिजनेस का नाम|business ka naam/i.test(text) ? 'business'
     : /टर्नओवर|turnover/i.test(text) ? 'turnover'
@@ -452,14 +471,14 @@ async function runAtoms() {
       orig(evt);
     };
     agent.on('session_started', (e) => { S.callId = e.call_id; S.atomsLive = true; setState('live', 'Live · listening'); });
-    agent.on('agent_start_talking', () => setState('agent', 'Agent speaking'));
+    agent.on('agent_start_talking', () => { flushOwner(); setState('agent', 'Agent speaking'); });
     agent.on('agent_stop_talking', () => setState('live', 'Live · listening'));
     agent.on('transcript', (e) => {
       showLive(null, '');
       const text = (e.text || '').trim();
       if (!text) return;
-      if (e.role === 'user') processOwner(text).then((r) => r?.consent && !S.submitted && push(true));
-      else { addTurn('agent', text); noteReadBack(text); }
+      if (e.role === 'user') bufferOwner(text);
+      else { flushOwner(); addTurn('agent', text); noteReadBack(text); }
     });
     agent.on('session_ended', (e) => {
       if (!S.atomsLive || S.mode !== 'atoms') return; // a refused connection: the fallback below takes over
@@ -598,7 +617,7 @@ async function push(fromConsent = false) {
 // ---------------- wiring ----------------
 
 function reset() {
-  Object.assign(S, { history: [], form: {}, fresh: new Set(), assessment: null, concerns: [], submitted: false, lastJev: null, jevTurns: 0, askCount: {}, awaitingConsent: false, callId: null, pendingConfirm: null, toConfirm: [], confirmAsked: new Set(), session: `web-${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')}-${Math.random().toString(36).slice(2, 6)}` });
+  Object.assign(S, { history: [], form: {}, fresh: new Set(), assessment: null, concerns: [], submitted: false, lastJev: null, jevTurns: 0, askCount: {}, awaitingConsent: false, callId: null, ownerBuf: [], ownerTimer: null, pendingConfirm: null, toConfirm: [], confirmAsked: new Set(), session: `web-${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')}-${Math.random().toString(36).slice(2, 6)}` });
   $('#transcript').innerHTML = `<div class="empty"><p>Press <b>Start call</b>. The agent asks in Hinglish; answer however you like — Hindi, English, or both.</p><p class="muted">Try giving amounts in lakh, correcting yourself, or asking "savings account se chalega?"</p></div>`;
   $('#headline').textContent = 'Bolkar business loan apply kijiye.';
   $('#jevBody').innerHTML = ''; $('#jevMeta').textContent = 'No turns yet';

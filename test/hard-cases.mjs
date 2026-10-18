@@ -75,6 +75,13 @@ const CASES = [
   [Q.applicant_name, 'अनिमेश enterprises।', 'business', 'Animesh Enterprises'],
   [Q.business, 'अ, अपना कोयम्बत और मैं', 'location', 'Coimbatore'],
   [Q.business, 'business तो अभी मेरा diwali gift का है, कोयंबटूर में।', 'business', 'Retail'],
+  // From the Oct 18 09:13 call
+  [Q.applicant_name, 'मेरा नाम है animesh ra raj galkaukar।', 'applicant_name', 'Animesh Raj Galkaukar'],
+  [Q.applicant_name, 'नहीं नहीं नहीं animesh gaikwande.', 'applicant_name', 'Animesh Gaikwande'],
+  [Q.bank_account, 'current account में आता है। मेरी ये अारूर विसिया bank में।', 'bank_account', 'Karur Vysya'],
+  [Q.existing_emi, 'महीने महीने का नहीं, महीने का नहीं है। साल का है ₹2,00,00,000। EMI.', 'existing_emi', '₹2 Cr EMI / year'],
+  [Q.gst_udyam, 'हाँ दोनों है।', 'gst_udyam', 'GST registered'],
+  [Q.requested_amount, 'मुझे 6,00,00,000 का loan चाहिए।', 'requested_amount', '₹6 Cr'],
 ];
 
 // Cases flagged by people on /logs (see test/pull-labels.mjs).

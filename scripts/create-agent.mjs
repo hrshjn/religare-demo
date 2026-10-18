@@ -41,6 +41,7 @@ You are Ananya, Religare Finvest's AI loan assistant, on a live web call with th
 - Confirm three things, once each, right after you hear them: the loan amount, the owner's full name, and the business name. Read the value back and ask "सही है?". Example: "एक बार कन्फ़र्म कर लूँ, बिज़नेस का नाम अनिमेश एंटरप्राइज़ेज़, सही है?"
 - After you ask "सही है?", stop talking and wait for the owner's answer. Never answer your own question and never move on until they say yes or correct it.
 - Put the read-back and the confirmation question in one reply. Do not say "ठीक है" first and then ask separately.
+- A confirmation reply ends with "सही है?". Do not add the next question after it in the same reply.
 - If the owner's reply sounds unfinished ("मेरा नाम है", "मुझे चाहिए कुछ", only "अ..."), say only "जी, बताइए" and wait. Do not guess the rest.
 - If you hear only a number like "एक लाख" right after a garbled word, ask "कितने लाख?" instead of assuming.
 - If the owner gives several details at once, do not ask for them again.
@@ -75,7 +76,7 @@ const POST_CALL = {
   useInternalAnalyticsModel: true,
   useReasoningModel: false,
   dispositionMetrics: [
-    { identifier: 'loan_amount_inr', dispositionMetricType: 'INTEGER', dispositionMetricPrompt: 'The loan amount the business owner finally asked for, in Indian rupees as a whole number (1 lakh = 100000, 1 crore = 10000000). If they corrected themselves, use the corrected amount. If never stated, return 0.' },
+    { identifier: 'loan_amount_inr', dispositionMetricType: 'INTEGER', dispositionMetricPrompt: 'The loan amount the business owner finally asked for, in Indian rupees as a whole number. Indian digit grouping: 65,00,000 = 6500000 (65 lakh); 6,00,00,000 = 60000000 (6 crore); 1 lakh = 100000; 1 crore = 10000000. If they corrected themselves, use the corrected amount. If never stated, return 0.' },
     { identifier: 'loan_purpose', dispositionMetricType: 'ENUM', choices: ['working_capital', 'machinery', 'expansion', 'debt_refinance', 'other', 'unknown'], dispositionMetricPrompt: 'What the owner said the loan is for. Use unknown if not stated.' },
     { identifier: 'bank_account_type', dispositionMetricType: 'ENUM', choices: ['current', 'savings', 'both', 'unknown'], dispositionMetricPrompt: 'Which type of bank account the business money comes into. Use unknown if not stated.' },
     { identifier: 'top_borrower_concern', dispositionMetricType: 'ENUM', choices: ['savings_account_eligibility', 'how_much_loan', 'emi_or_rate', 'documents', 'credit_score', 'none'], dispositionMetricPrompt: 'The main question or worry the owner raised during the call. Use none if they raised no question.' },
@@ -102,8 +103,8 @@ const CONFIG = {
   waitForUserToSpeakFirst: false,
   allowInterruptions: true,
   interruptionBackoffTimer: 1,
-  smartTurnConfig: { isEnabled: true, waitTimeInSecs: 3 },
-  voiceDetectionConfig: { confidence: 0.78, minVolume: 0.65, triggerTimeInSecs: 0.2, releaseTimeInSecs: 0.8 }, // 0.4 s cut people off mid-sentence ("मेरा नाम है…")
+  smartTurnConfig: { isEnabled: true, waitTimeInSecs: 2 }, // 3 s made replies average 3.5 s; 2 s with the 0.6 s release below is the middle ground
+  voiceDetectionConfig: { confidence: 0.78, minVolume: 0.65, triggerTimeInSecs: 0.2, releaseTimeInSecs: 0.6 }, // 0.4 s cut people off mid-sentence ("मेरा नाम है…"); 0.8 s felt slow
   denoisingConfig: { isEnabled: true },
   redactionConfig: { isEnabled: false },
   backgroundSound: '',
