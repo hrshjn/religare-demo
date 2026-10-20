@@ -134,7 +134,7 @@ async function processOwner(text) {
       S.lastJev = { ...r.jev, utterance: text };
       S.jevTurns++;
       S.toConfirm = r.to_confirm || [];
-      if (r.confirm_result === 'confirmed') tag(el, `confirmed ${S.pendingConfirm?.label || ''}`);
+      if (r.confirm_result === 'confirmed') tag(el, `confirmed ${[].concat(S.pendingConfirm || []).map((c) => c.label).join(' + ')}`);
       S.lastConfirm = S.pendingConfirm;
       S.pendingConfirm = null;
       if (r.corrected) tag(el, 'correction');
@@ -447,9 +447,11 @@ function noteReadBack(text) {
     : /लाख|करोड़|अमाउंट|amount|lakh|crore/i.test(text) ? (['turnover', 'existing_emi', 'emi_comfort'].includes(S.topicField) ? S.topicField : 'requested_amount')
     : S.topicField; // "गुप्ता श्री गुप्ता, सही है?" has no keyword: it is about whatever she last asked
   if (!field) return;
-  const label = (CFG.fields.find(([k]) => k === field) || [field, field])[1];
-  S.pendingConfirm = { field, label, value: S.form[field]?.display || '', spoken };
-  S.confirmAsked.add(field + '|' + S.pendingConfirm.value);
+  const item = (f, sp) => ({ field: f, label: (CFG.fields.find(([k]) => k === f) || [f, f])[1], value: S.form[f]?.display || '', spoken: sp });
+  // "नाम पुष्पा भट्ट और बिज़नेस का नाम सिद्धार्थ, सही है?" confirms two fields at once.
+  const both = text.match(/नाम\s+(.+?)\s+और\s+(?:बिज़नेस|बिजनेस) का नाम\s+(.+)$/);
+  S.pendingConfirm = both ? [item('applicant_name', both[1].trim()), item('business', both[2].trim())] : item(field, spoken);
+  for (const c of [].concat(S.pendingConfirm)) S.confirmAsked.add(c.field + '|' + c.value);
 }
 
 const consentLine = () => {

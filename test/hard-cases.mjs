@@ -87,6 +87,26 @@ const CASES = [
   [Q.vintage, 'हुए कुछ. 21 30 साल हो गए।', 'vintage', '30 yrs'],
   ['कोई बात नहीं, कितने साल?', '21', 'vintage', '21 yrs'],
   ['पिछले दो साल का आई टी आर फाइल किया है?', 'हाँ, किया।', 'itr', 'Filed'],
+  // From the Oct 19 calls (CALL-1792410977351-5df5c8 and replays)
+  ['जी एस टी नंबर बताइए?', '29ABC. 12345678', 'gst_udyam', 'incomplete'],
+  [Q.turnover, 'महीने का 15 18,000 का काम होता है।', 'turnover', '₹15,000–18,000'],
+  [Q.bank_account, 'I see I see a bank में current account है।', 'bank_account', 'ICICI'],
+  [Q.emi_comfort, '₹500', 'emi_comfort', '₹500'],
+  [Q.existing_emi, 'महीने का मेरा 5000 का EMI कटता है।', 'existing_emi', '₹5,000'],
+  [Q.turnover, 'साल का 50,00,00,00,000 है।', 'turnover', '₹5000 Cr'],
+  [Q.vintage, '500 साल पुराना है।', 'vintage', '500 yrs'],
+  [Q.applicant_name, 'business का नाम है राम भंडार चनाचूर वाला।', 'business', 'Ram Bhandar'],
+  [Q.business, 'किराने की दुकान है रामनगर में।', 'location', 'Ramnagar'],
+  [Q.bank_account, 'cash आता है, account नहीं है।', 'bank_account', 'No bank account'],
+  [Q.collateral, 'बीवी का गहना रख लो।', 'collateral', 'Gold'],
+  [Q.business, 'मैं दवाई बेचता हूँ।', 'business', 'Retail'],
+];
+
+// Values that must NOT appear (field, forbidden substring).
+const NEG = [
+  [Q.business, 'मेरा loan approve हो गया है।', 'location', 'Gaya'],
+  [Q.business, 'किराने की दुकान है रामनगर में।', 'location', 'Men'],
+  ['जी एस टी नंबर बताइए?', '29ABC. 12345678', 'turnover', 'Cr'],
 ];
 
 // Cases flagged by people on /logs (see test/pull-labels.mjs).
@@ -108,9 +128,14 @@ const results = await Promise.all(CASES.map(async ([q, said, field, want]) => {
     return { ok: false, said, field, want, got: 'ERROR ' + e.message };
   }
 }));
+for (const [q, said, field, bad] of NEG) {
+  const r = await processTurn({ utterance: said, history: [{ role: 'agent', text: q }] });
+  const got = r.form[field]?.display || '';
+  results.push({ ok: !got.toLowerCase().includes(bad.toLowerCase()), said, field, want: `not "${bad}"`, got, roman: r.jev.romanized });
+}
 for (const x of results) {
   if (!x.ok) fails++;
   console.log(`${x.ok ? 'PASS' : 'FAIL'}  ${x.field.padEnd(16)} ${x.said}\n      want "${x.want}"  got "${x.got}"${x.ok ? '' : `  (roman: ${x.roman})`}`);
 }
-console.log(`\n${CASES.length - fails}/${CASES.length} passed`);
+console.log(`\n${results.length - fails}/${results.length} passed`);
 process.exit(fails ? 1 : 0);
