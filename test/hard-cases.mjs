@@ -82,6 +82,11 @@ const CASES = [
   [Q.existing_emi, 'महीने महीने का नहीं, महीने का नहीं है। साल का है ₹2,00,00,000। EMI.', 'existing_emi', '₹2 Cr EMI / year'],
   [Q.gst_udyam, 'हाँ दोनों है।', 'gst_udyam', 'GST registered'],
   [Q.requested_amount, 'मुझे 6,00,00,000 का loan चाहिए।', 'requested_amount', '₹6 Cr'],
+  // From the Oct 20 03:01 call
+  ['Kitne lakh chahiye, ek baar phir bataiye?', 'मुझे... 53', 'requested_amount', '₹53 lakh'],
+  [Q.vintage, 'हुए कुछ. 21 30 साल हो गए।', 'vintage', '30 yrs'],
+  ['कोई बात नहीं, कितने साल?', '21', 'vintage', '21 yrs'],
+  ['पिछले दो साल का आई टी आर फाइल किया है?', 'हाँ, किया।', 'itr', 'Filed'],
 ];
 
 // Cases flagged by people on /logs (see test/pull-labels.mjs).

@@ -414,6 +414,20 @@ function flushOwner() {
   processOwner(text).then((r) => r?.consent && !S.submitted && push(true));
 }
 
+// Which field Ananya's latest question is about, so short answers and keyword-less
+// read-backs can be tied to it.
+const TOPICS = [
+  ['business', /बिज़नेस का नाम|बिजनेस का नाम/], ['applicant_name', /शुभ नाम|आपका नाम/], ['loan_purpose', /किस काम/],
+  ['location', /शहर/], ['constitution', /प्रोप्राइटरशिप/], ['vintage', /कितने साल/], ['turnover', /टर्नओवर/],
+  ['bank_account', /अकाउंट|बैंक/], ['gst_udyam', /जी एस टी|उद्यम/], ['itr', /आई टी आर/], ['existing_emi', /ई एम आई चल|लोन या/],
+  ['collateral', /घर, दुकान|सिक्योरिटी/], ['emi_comfort', /कम्फ़र्टेबल|कंफर्टेबल|comfortable/], ['requested_amount', /कितने अमाउंट|कितने लाख|कितना अमाउंट/],
+];
+function noteTopic(text) {
+  const q = text.split(/सही है/).pop();
+  const hit = TOPICS.find(([, re]) => re.test(q));
+  if (hit) S.topicField = hit[0];
+}
+
 // Atoms mode: when Ananya reads a value back ("…सही है?"), remember which field it is,
 // so the owner's next "haan" confirms that field in the form.
 function noteReadBack(text) {
@@ -421,17 +435,20 @@ function noteReadBack(text) {
   // Only the part before the first "सही है" says what is being confirmed
   // ("आपका नाम अनिमेश, सही है? और बिज़नेस का नाम क्या है?" confirms the name).
   text = text.split(/सही है|sahi hai/i)[0];
+  // What she actually said back, without the framing ("एक बार कन्फ़र्म कर लूँ, बिज़नेस का नाम …")
+  const spoken = text.replace(/एक बार कन्फ़र्म कर लूँ|एक बार कन्फर्म कर लूँ|आपका नाम|आपका शुभ नाम|बिज़नेस का नाम|बिजनेस का नाम|लोन अमाउंट|तो|जी[,]?$/g, ' ').replace(/[,—–]/g, ' ').replace(/\s+/g, ' ').trim();
   const field =
     /बिज़नेस का नाम|बिजनेस का नाम|business ka naam/i.test(text) ? 'business'
     : /टर्नओवर|turnover/i.test(text) ? 'turnover'
     : /कंफर्टेबल|कम्फर्टेबल|comfortable/i.test(text) ? 'emi_comfort'
     : /ई एम आई|EMI/i.test(text) ? 'existing_emi'
     : /नाम|naam/i.test(text) ? 'applicant_name'
-    : /लाख|करोड़|अमाउंट|amount|lakh|crore/i.test(text) ? 'requested_amount'
-    : null;
+    : /साल/i.test(text) && S.topicField === 'vintage' ? 'vintage'
+    : /लाख|करोड़|अमाउंट|amount|lakh|crore/i.test(text) ? (['turnover', 'existing_emi', 'emi_comfort'].includes(S.topicField) ? S.topicField : 'requested_amount')
+    : S.topicField; // "गुप्ता श्री गुप्ता, सही है?" has no keyword: it is about whatever she last asked
   if (!field) return;
   const label = (CFG.fields.find(([k]) => k === field) || [field, field])[1];
-  S.pendingConfirm = { field, label, value: S.form[field]?.display || '' };
+  S.pendingConfirm = { field, label, value: S.form[field]?.display || '', spoken };
   S.confirmAsked.add(field + '|' + S.pendingConfirm.value);
 }
 
@@ -478,7 +495,7 @@ async function runAtoms() {
       const text = (e.text || '').trim();
       if (!text) return;
       if (e.role === 'user') bufferOwner(text);
-      else { flushOwner(); addTurn('agent', text); noteReadBack(text); }
+      else { flushOwner(); addTurn('agent', text); noteTopic(text); noteReadBack(text); }
     });
     agent.on('session_ended', (e) => {
       if (!S.atomsLive || S.mode !== 'atoms') return; // a refused connection: the fallback below takes over
