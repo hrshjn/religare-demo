@@ -100,6 +100,9 @@ const CASES = [
   [Q.bank_account, 'cash आता है, account नहीं है।', 'bank_account', 'No bank account'],
   [Q.collateral, 'बीवी का गहना रख लो।', 'collateral', 'Gold'],
   [Q.business, 'मैं दवाई बेचता हूँ।', 'business', 'Retail'],
+  // From the Oct 21 03:04 call (CALL-1792551832926-d459cf)
+  [Q.applicant_name, 'मेरा नाम अ- अ नुभव पटेल है', 'applicant_name', 'Anubhav Patel'],
+  ['पिछले दो साल का आई टी आर फाइल किया है?', 'हाँ, किया ना file', 'itr', 'Filed'],
 ];
 
 // Values that must NOT appear (field, forbidden substring).
@@ -132,6 +135,23 @@ for (const [q, said, field, bad] of NEG) {
   const r = await processTurn({ utterance: said, history: [{ role: 'agent', text: q }] });
   const got = r.form[field]?.display || '';
   results.push({ ok: !got.toLowerCase().includes(bad.toLowerCase()), said, field, want: `not "${bad}"`, got, roman: r.jev.romanized });
+}
+// Multi-turn checks: [name, async () => [ok, got]]
+const MULTI = [
+  ['read-back of the name, page guessed "business"', async () => {
+    const t1 = await processTurn({ utterance: 'अनुभव पटेल', history: [{ role: 'agent', text: 'आपका शुभ नाम क्या है, और बिज़नेस का नाम?' }] });
+    const r = await processTurn({ utterance: 'हाँ', form: t1.form, history: [{ role: 'agent', text: 'अनुभव पटेल, सही है?' }], confirming: { field: 'business', label: 'Business', value: '', spoken: 'अनुभव पटेल' } });
+    return [r.form.applicant_name?.confirmed === true && !r.form._business_name, `name ${r.form.applicant_name?.display} confirmed=${r.form.applicant_name?.confirmed}, business=${r.form._business_name?.display}`];
+  }],
+  ['hesitant GST answer firmed up by a later turn', async () => {
+    const t1 = await processTurn({ utterance: 'नहीं, मेरा GST का registration है उद्यम का registration दोनों है', history: [{ role: 'agent', text: 'जी एस टी रजिस्ट्रेशन है? अगर है, तो जी एस टी नंबर बताइए।' }] });
+    const r = await processTurn({ utterance: 'अ, GST number अभी मुझे याद नहीं है', form: t1.form, history: [{ role: 'agent', text: 'जी एस टी नंबर बताइए, फिर उद्यम सर्टिफिकेट के बारे में भी पूछूँगी।' }] });
+    return [r.form._gst?.value === 'has_gst' && r.form._gst.confidence >= 0.9, `_gst ${r.form._gst?.value} p=${r.form._gst?.confidence} (was ${t1.form._gst?.confidence})`];
+  }],
+];
+for (const [name, fn] of MULTI) {
+  const [ok, got] = await fn().catch((e) => [false, 'ERROR ' + e.message]);
+  results.push({ ok, said: name, field: 'multi-turn', want: 'see test', got });
 }
 for (const x of results) {
   if (!x.ok) fails++;

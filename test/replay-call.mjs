@@ -5,6 +5,7 @@ import { processTurn } from '../lib/pipeline.js';
 import { FIELDS } from '../lib/schema.js';
 const id = process.argv[2];
 const c = await fetch(`https://api.smallest.ai/atoms/v1/conversation/${id}`, { headers: { Authorization: `Bearer ${process.env.SMALLEST_API_KEY}` } }).then((r) => r.json());
+if (!(c.data || c).transcript?.length) { console.error('No transcript returned (retry):', JSON.stringify(c).slice(0, 300)); process.exit(1); }
 // Merge consecutive owner lines, as the page does before sending them to Jev.
 const turns = [];
 for (const t of (c.data || c).transcript || []) {

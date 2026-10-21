@@ -424,8 +424,9 @@ const TOPICS = [
 ];
 function noteTopic(text) {
   const q = text.split(/सही है/).pop();
-  const hit = TOPICS.find(([, re]) => re.test(q));
-  if (hit) S.topicField = hit[0];
+  // "आपका शुभ नाम क्या है, और बिज़नेस का नाम?" is about the name first: take the earliest topic in the question.
+  const hits = TOPICS.map(([f, re]) => [f, q.search(re)]).filter(([, i]) => i >= 0).sort((a, b) => a[1] - b[1]);
+  if (hits.length) S.topicField = hits[0][0];
 }
 
 // Atoms mode: when Ananya reads a value back ("…सही है?"), remember which field it is,
