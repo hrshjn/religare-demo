@@ -416,16 +416,16 @@ function flushOwner() {
 
 // Which field Ananya's latest question is about, so short answers and keyword-less
 // read-backs can be tied to it.
-const TOPICS = [
-  ['business', /बिज़नेस का नाम|बिजनेस का नाम/], ['applicant_name', /शुभ नाम|आपका नाम/], ['loan_purpose', /किस काम/],
-  ['location', /शहर/], ['constitution', /प्रोप्राइटरशिप/], ['vintage', /कितने साल/], ['turnover', /टर्नओवर/],
-  ['bank_account', /अकाउंट|बैंक/], ['gst_udyam', /जी एस टी|उद्यम/], ['itr', /आई टी आर/], ['existing_emi', /ई एम आई चल|लोन या/],
-  ['collateral', /घर, दुकान|सिक्योरिटी/], ['emi_comfort', /कम्फ़र्टेबल|कंफर्टेबल|comfortable/], ['requested_amount', /कितने अमाउंट|कितने लाख|कितना अमाउंट/],
-];
+// Patterns come from the server (lib/topics.js) so page and pipeline agree, in Devanagari and Latin.
+const PAGE_FIELD = { gst: 'gst_udyam', udyam: 'gst_udyam', industry: 'business' };
+let TOPICS = null;
+const topics = () => (TOPICS ??= (CFG.topics || []).map(([f, src, flags]) => [PAGE_FIELD[f] || f, new RegExp(src, flags)]));
 function noteTopic(text) {
-  const q = text.split(/सही है/).pop();
+  // The question is the first sentence ending in "?" ("ITR file किया है, ये हो गया। तो अभी कोई loan…?").
+  const s = text.split(/सही है\s*\?/).pop();
+  const q = s.split(/(?<=[?।!])\s+/).find((x) => /\?\s*$/.test(x)) || s;
   // "आपका शुभ नाम क्या है, और बिज़नेस का नाम?" is about the name first: take the earliest topic in the question.
-  const hits = TOPICS.map(([f, re]) => [f, q.search(re)]).filter(([, i]) => i >= 0).sort((a, b) => a[1] - b[1]);
+  const hits = topics().map(([f, re]) => [f, q.search(re)]).filter(([, i]) => i >= 0).sort((a, b) => a[1] - b[1]);
   if (hits.length) S.topicField = hits[0][0];
 }
 
@@ -437,9 +437,9 @@ function noteReadBack(text) {
   // ("आपका नाम अनिमेश, सही है? और बिज़नेस का नाम क्या है?" confirms the name).
   text = text.split(/सही है|sahi hai/i)[0];
   // What she actually said back, without the framing ("एक बार कन्फ़र्म कर लूँ, बिज़नेस का नाम …")
-  const spoken = text.replace(/एक बार कन्फ़र्म कर लूँ|एक बार कन्फर्म कर लूँ|आपका नाम|आपका शुभ नाम|बिज़नेस का नाम|बिजनेस का नाम|लोन अमाउंट|तो|जी[,]?$/g, ' ').replace(/[,—–]/g, ' ').replace(/\s+/g, ' ').trim();
+  const spoken = text.replace(/एक बार कन्फ़र्म कर लूँ|एक बार कन्फर्म कर लूँ|आपका नाम|आपका शुभ नाम|(?:बिज़नेस|बिजनेस|business) का नाम|लोन अमाउंट|क्या ये|क्या यह|तो|जी[,]?$/gi, ' ').replace(/[,—–]/g, ' ').replace(/\s+/g, ' ').trim();
   const field =
-    /बिज़नेस का नाम|बिजनेस का नाम|business ka naam/i.test(text) ? 'business'
+    /(?:बिज़नेस|बिजनेस|business|कंपनी|company)\s*(?:का|ka)\s*(?:नाम|naam)|business name/i.test(text) ? 'business'
     : /टर्नओवर|turnover/i.test(text) ? 'turnover'
     : /कंफर्टेबल|कम्फर्टेबल|comfortable/i.test(text) ? 'emi_comfort'
     : /ई एम आई|EMI/i.test(text) ? 'existing_emi'
@@ -581,6 +581,7 @@ function payload() {
       in_business_since: v('vintage'),
       gst_registered: f._gstin ? true : f._gst ? f._gst.value === 'has_gst' : null,
       gstin: f._gstin?.value?.gstin ?? null,
+      gstin_incomplete: f._gstin ? !!f._gstin.value?.partial : null,
       udyam_registered: f._udyam ? f._udyam.value === 'has_udyam' : null,
     },
     loan: {
@@ -594,6 +595,7 @@ function payload() {
       monthly_turnover_inr: f.turnover?.value ?? null,
       bank_account_type: f._account_type?.value ?? null,
       bank: f._account_bank?.value ?? null,
+      bank_is_wallet: f._account_bank ? !!f._account_bank.wallet : null,
       itr_filed: f._itr ? f._itr.value === 'filed' : null,
       itr_years: f._itr_years?.value ?? null,
     },
@@ -604,6 +606,7 @@ function payload() {
       outstanding_inr: f._existing_outstanding?.value ?? null,
     },
     security: { property: f._collateral?.value ?? null },
+    contact: { preferred_callback: f._callback?.value ?? null },
     pre_screen: { ...S.assessment, borrower_questions: S.concerns, note: 'Indicative routing from captured answers. Not a credit decision.' },
     capture_quality: Object.fromEntries(CFG.fields.filter(([k]) => f[k]).map(([k]) => [k, { confidence: f[k].confidence, needs_confirmation: f[k].confirm, evidence: f[k].evidence }])),
     consent_to_share_with_credit_team: S.submitted || null,

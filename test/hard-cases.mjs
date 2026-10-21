@@ -7,6 +7,7 @@ import { processTurn } from '../lib/pipeline.js';
 import { SCRIPT } from '../lib/schema.js';
 
 const Q = Object.fromEntries(SCRIPT.map((s) => [s.fields[0], s.say]));
+const LINES_CONSENT = 'शुक्रिया कार्तिक जी। क्या मैं आपकी डिटेल्स रेलिगेयर की क्रेडिट टीम को भेज दूँ? वो डॉक्युमेंट्स के लिए आपको कॉल करेंगे।';
 const CASES = [
   // amount
   [Q.requested_amount, 'मुझे अभी 40,00,000 का loan चाहिए।', 'requested_amount', '₹40 lakh'],
@@ -103,6 +104,18 @@ const CASES = [
   // From the Oct 21 03:04 call (CALL-1792551832926-d459cf)
   [Q.applicant_name, 'मेरा नाम अ- अ नुभव पटेल है', 'applicant_name', 'Anubhav Patel'],
   ['पिछले दो साल का आई टी आर फाइल किया है?', 'हाँ, किया ना file', 'itr', 'Filed'],
+  // From the client demo (CALL-1792578891602-ced377) and the Oct 21 test calls
+  [Q.requested_amount, 'कुछ 10 से 15,00,000 के बीच में देख रहा हूँ मैं', 'requested_amount', '₹10–15 lakh'],
+  [Q.emi_comfort, '50,000 से 60,000 के बीच में', 'emi_comfort', '₹50,000–60,000'],
+  [Q.bank_account, 'jaipur cooperative', 'bank_account', 'Jaipur Co-operative Bank'],
+  [Q.bank_account, 'savings account में आता है मेरे पास। अभी HDFC, IDFC दोनों है।', 'bank_account', 'HDFC Bank, IDFC First Bank'],
+  [Q.bank_account, 'नहीं नहीं मैं घर पे paytm है। उसमें रखता हूँ', 'bank_account', 'wallet'],
+  [Q.collateral, 'हाँ हाँ, दुकान और घर दोनों रख सकते हैं।', 'collateral', ' + '],
+  [Q.applicant_name, 'मेरा नाम है परमेश्वर', 'applicant_name', 'Parmeshvar'],
+  [Q.constitution, 'कुछ नहीं है मेरे पास। मेरा ठेला लगता है।', 'constitution', 'Proprietorship'],
+  [Q.business, 'ठेला लगाता हूँ, चाट का।', 'business', 'Street vendor'],
+  ['जी एस टी registration है? अगर है, तो जी एस टी number बताइए।', 'GST number है XYZ, 934816', 'gst_udyam', 'XYZ934816'],
+  [LINES_CONSENT, 'हाँ, लेकिन शाम को 5 बजे के बाद ही, उससे पहले मैं busy रहता हूँ', '_callback', '5 baje ke baad'],
 ];
 
 // Values that must NOT appear (field, forbidden substring).
@@ -110,6 +123,11 @@ const NEG = [
   [Q.business, 'मेरा loan approve हो गया है।', 'location', 'Gaya'],
   [Q.business, 'किराने की दुकान है रामनगर में।', 'location', 'Men'],
   ['जी एस टी नंबर बताइए?', '29ABC. 12345678', 'turnover', 'Cr'],
+  [Q.constitution, 'कुछ नहीं है मेरे पास। मेरा ठेला लगता है। महीने के 50 लगाते हैं मेरे पास', 'collateral', 'No property'],
+  [Q.vintage, 'अ, कुछ हो गए। 50 साल से चला रहे हैं हम धंधा ये वाला', 'business', 'Dhandha'],
+  ['तो पिछले दो साल का आई टी आर file किया है?', 'ना। और मैं राज का भी उनका CDS भी डाल दूंगा।', 'applicant_name', 'Raj ka'],
+  ['जी एस टी number पंद्रह अक्षर का होता है, एक बार पूरा बताइए।', 'XYZ 9318462121934', 'turnover', '₹'],
+  ['जी एस टी number पंद्रह अक्षर का होता है, एक बार पूरा बताइए।', 'XYZ 9318462121934', 'requested_amount', '₹'],
 ];
 
 // Cases flagged by people on /logs (see test/pull-labels.mjs).
@@ -148,7 +166,43 @@ const MULTI = [
     const r = await processTurn({ utterance: 'अ, GST number अभी मुझे याद नहीं है', form: t1.form, history: [{ role: 'agent', text: 'जी एस टी नंबर बताइए, फिर उद्यम सर्टिफिकेट के बारे में भी पूछूँगी।' }] });
     return [r.form._gst?.value === 'has_gst' && r.form._gst.confidence >= 0.9, `_gst ${r.form._gst?.value} p=${r.form._gst?.confidence} (was ${t1.form._gst?.confidence})`];
   }],
+  ['two purposes in one sentence (demo)', async () => {
+    const r = await processTurn({ utterance: 'अ, थोड़ा सा 1 नया 2nd दुकान भी डालने का सोच रहा हूँ मैं और normal stock खरीदना है उसके लिए भी', history: [{ role: 'agent', text: Q.loan_purpose }] });
+    const d = r.form.loan_purpose?.display || '';
+    return [/expansion/i.test(d) && /working capital/i.test(d), d];
+  }],
+  ['one-word business correction keeps the suffix, then yes confirms (demo)', async () => {
+    const t1 = await processTurn({ utterance: 'reliar enterprises', history: [{ role: 'agent', text: 'आपका business का नाम क्या है, एक बार फिर बताइए?' }] });
+    const t2 = await processTurn({ utterance: 'नहीं RELIGARE', form: t1.form, history: [{ role: 'agent', text: 'R E L I A R Enterprises, क्या ये सही है?' }], confirming: { field: 'business', label: 'Business', value: t1.form.business?.display, spoken: 'R E L I A R Enterprises' } });
+    const r = await processTurn({ utterance: 'yes', form: t2.form, history: [{ role: 'agent', text: 'Religare Enterprises, क्या ये सही है?' }], confirming: { field: 'business', label: 'Business', value: t2.form.business?.display, spoken: 'Religare Enterprises' } });
+    return [r.form._business_name?.value === 'Religare Enterprises' && r.form.business?.confirmed === true, `after fix: ${t2.form._business_name?.value}; after yes: ${r.form._business_name?.value} confirmed=${r.form.business?.confirmed}`];
+  }],
+  ['GST number given in pieces (Oct 21 call)', async () => {
+    const ask = 'जी एस टी number पंद्रह अक्षर का होता है, एक बार पूरा बताइए।';
+    const t1 = await processTurn({ utterance: '29ABC 12345678', history: [{ role: 'agent', text: ask }] });
+    const r = await processTurn({ utterance: 'हां, last के दो अक्षर हैं Z5', form: t1.form, history: [{ role: 'agent', text: 'ये तेरह अक्षर हुए, जी एस टी number पंद्रह अक्षर का होता है।' }] });
+    return [r.form._gstin?.value?.gstin === '29ABC12345678Z5', `${t1.form._gstin?.display} → ${r.form._gstin?.display}`];
+  }],
 ];
+// Topic detection on real agent lines (no Jev call).
+const TOPIC_LINES = [
+  ['अक्षत जी, और आपके business का नाम क्या है?', 'business'],
+  ['अच्छा, voice agents का business Coimbatore में। तो business proprietorship है, partnership है, या company?', 'constitution'],
+  ['अच्छा, तीन साल से। तो महीने का average turnover कितना होता है? साल का भी बता सकते', 'turnover'],
+  ['बीस करोड़ रुपये साल का turnover, अच्छा। तो business का पैसा current account में आता है या savings account में? कौन सा bank है?', 'bank_account'],
+  ['Savings account हो तो भी application note हो जाती है — credit team आपके bank statement देख कर बताएगी। तो जी एस टी registration है? अगर है, तो जी एस टी number बताइए।', 'gst'],
+  ['कोई बात नहीं। तो पिछले दो साल का ITR file किया है?', 'itr'],
+  ['I T R के बारे में बता दीजिए — पिछले दो साल का I T R file किया है?', 'itr'],
+  ['अच्छा, ITR file किया है, ये हो गया। तो अभी कोई loan या ई एम आई चल रही है?', 'existing_emi'],
+  ['नमस्ते! मैं अनन्या, रेलिगेयर फिनवेस्ट की ए आई Loan Assistant। दो-तीन minute लगेंगे। आपको कितने रुपये का Loan चाहिए?', 'requested_amount'],
+  ['What would you like to use the loan for — stock or working capital, machinery, or expanding your business?', 'loan_purpose'],
+  ['अच्छा, stocks के लिए चाहिए। तो आपका शुभ नाम क्या है, और बिज़नेस का नाम?', 'applicant_name'],
+  ['जी, समझ गई। तो हर महीने कितनी ई एम आई आपके लिए comfortable रहेगी?', 'emi_comfort'],
+  ['ly के नाम पे कोई घर, दुकान या factory है, जो security में रख सकते हैं?', 'collateral'],
+];
+const { topicOf, GST_NUMBER_ASKED } = await import('../lib/topics.js');
+for (const [line, want] of TOPIC_LINES) results.push({ ok: topicOf(line) === want, said: line.slice(0, 70), field: 'topic', want, got: topicOf(line) || '' });
+for (const line of ['जी एस टी number पंद्रह अक्षर का होता है, एक बार पूरा बताइए।', 'जी एस टी नंबर बताइए?', 'GST number बताइए']) results.push({ ok: GST_NUMBER_ASKED.test(line), said: line, field: 'gst-number-asked', want: 'true', got: String(GST_NUMBER_ASKED.test(line)) });
 for (const [name, fn] of MULTI) {
   const [ok, got] = await fn().catch((e) => [false, 'ERROR ' + e.message]);
   results.push({ ok, said: name, field: 'multi-turn', want: 'see test', got });

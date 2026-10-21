@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { forClient as topicsForClient } from './lib/topics.js';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -90,6 +91,7 @@ const routes = {
     lines: { ...LINES, consent: LINES.consent('{name}') }, // client fills in the first name
     concerns: CONCERNS,
     policy: POLICY,
+    topics: topicsForClient(), // [field, regex source, flags]: what an agent line is asking about
   }),
 
   // Mint a single-use, 30-second Atoms web-call token; the API key never reaches the browser.

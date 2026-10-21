@@ -121,6 +121,7 @@ The list lives in `lib/schema.js → PRONUNCIATIONS`. `node test/pronounce-check
 
 - `lib/schema.js` holds the fields, the agent's Hinglish script, the borrower-question replies and the policy thresholds. Edit this file to change the conversation. `scripts/create-agent.mjs` builds the Atoms prompt from it.
 - `lib/extract.js` generates candidates deterministically: Indian number formats, Hindi number words and ranges ("bees pachchis hazaar" = up to ₹25k), spoken GSTIN with checksum, Devanagari transliteration.
+- `lib/topics.js` says which field an agent line asks about, in Devanagari and Latin script. The server uses it to gate volunteered answers and the page gets it through `/api/config` to tie read-backs to a field, so prompt wording changes don't silently break either side.
 - `lib/pipeline.js` builds the Jev request, applies the answers, composes the visible fields, and computes the indicative credit-team routing.
 - `server.js` serves the static app, `/api/turn`, `/api/tts`, `/api/call-token`, `/api/push`, and `/stt` (a WebSocket proxy to Pulse that keeps the API key on the server).
 - `public/` holds the presenter UI.
