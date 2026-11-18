@@ -589,6 +589,7 @@ function payload() {
       purpose: v('loan_purpose'),
       purpose_text: f.loan_purpose?.display ?? null,
       comfortable_emi_inr: f._emi_comfort?.value ?? null,
+      comfortable_emi_low_inr: f._emi_comfort?.low ?? null,
       preferred_tenure_months: f._tenure?.value ?? null,
     },
     financials: {

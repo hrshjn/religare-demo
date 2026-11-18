@@ -156,6 +156,17 @@ for (const [q, said, field, bad] of NEG) {
 }
 // Multi-turn checks: [name, async () => [ok, got]]
 const MULTI = [
+  ['a range Pulse glued into one figure is read as a range ("10,00,01,00,000" EMI)', async () => {
+    const t1 = await processTurn({ utterance: 'हर महीने 1,50,000 का धंधा हो जाता है', history: [{ role: 'agent', text: 'महीने का turnover कितना है?' }] });
+    const r = await processTurn({ utterance: 'इन कुछ महीनों में आप हमसे हर महीने 10,00,01,00,000 तक भी ले लोगे तो भी चलेगा', form: t1.form, history: [{ role: 'agent', text: 'तो हर महीने कितनी EMI आपके लिए comfortable रहेगी?' }] });
+    const f = r.form._emi_comfort;
+    return [f?.value === 100000 && f?.low === 10000 && f?.confirm === true, `${r.form.emi_comfort?.display} low=${f?.low} confirm=${f?.confirm}`];
+  }],
+  ['an impossible EMI is never filled, only flagged', async () => {
+    const r = await processTurn({ utterance: 'हर महीने 50,00,00,00,000 दे देंगे', history: [{ role: 'agent', text: 'तो हर महीने कितनी EMI आपके लिए comfortable रहेगी?' }] });
+    const flags = (r.assessment?.flags || []).map((x) => x.t).join(' | ');
+    return [!r.form._emi_comfort && /Comfortable EMI unclear/.test(flags), `emi=${r.form._emi_comfort?.display} flags=${flags}`];
+  }],
   ['read-back of the name, page guessed "business"', async () => {
     const t1 = await processTurn({ utterance: 'अनुभव पटेल', history: [{ role: 'agent', text: 'आपका शुभ नाम क्या है, और बिज़नेस का नाम?' }] });
     const r = await processTurn({ utterance: 'हाँ', form: t1.form, history: [{ role: 'agent', text: 'अनुभव पटेल, सही है?' }], confirming: { field: 'business', label: 'Business', value: '', spoken: 'अनुभव पटेल' } });
